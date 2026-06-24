@@ -1173,9 +1173,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           _snapOvershootY = 0.0;
         }
 
+        // When an axis is snapped, drive it to sit *exactly* on the guide rather
+        // than applying this frame's drag delta on top of the correction. Using
+        // `delta - bestN` would leave the selection `delta` off the guide once
+        // motion stops (the residual that bent attached edges on release); the
+        // correct target move for a snapped axis is just `-bestN`, which lands
+        // the edge on the guide and holds it there frame to frame.
         var snappedDelta = dragDelta;
-        if (bestDx != null) snappedDelta = Offset(snappedDelta.dx - bestDx, snappedDelta.dy);
-        if (bestDy != null) snappedDelta = Offset(snappedDelta.dx, snappedDelta.dy - bestDy);
+        if (bestDx != null) snappedDelta = Offset(-bestDx, snappedDelta.dy);
+        if (bestDy != null) snappedDelta = Offset(snappedDelta.dx, -bestDy);
 
         // Only show guides whose axis was actually snapped.
         for (final guide in guides) {
