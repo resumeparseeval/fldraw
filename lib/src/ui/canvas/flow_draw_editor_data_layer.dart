@@ -1441,17 +1441,17 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// Cmd+Arrow: jump the selection to the nearest shape node in [direction]
   /// from the currently selected one. Considers only nodes that lie within a
   /// 90° cone toward [direction], scoring by along-axis distance plus an
-  /// off-axis penalty so the most "in line" node wins. Re-centres the viewport
-  /// on the node it lands on. No-op if nothing's selected or none lie that way.
-  void _navigateToNode(Offset direction) {
-    final from = _singleSelectedShape(_selectionBloc.state);
-    if (from == null) return;
-    final origin = from.rect.center;
+  /// off-axis penalty so the most "in line" node wins. Returns the id of the
+  /// nearest node in [direction] from [fromId], or null if none lie that way.
+  String? _nearestNodeInDirection(String fromId, Offset direction) {
+    final fromRect = _canvasBloc.state.drawingObjects[fromId]?.rect;
+    if (fromRect == null) return null;
+    final origin = fromRect.center;
 
     String? bestId;
     double bestScore = double.infinity;
     for (final (id, rect) in _navigableShapes()) {
-      if (id == from.id) continue;
+      if (id == fromId) continue;
       final delta = rect.center - origin;
       // Along-axis component must be positive (target is in the pressed
       // direction); off-axis is the perpendicular spread.
@@ -1468,14 +1468,55 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         bestId = id;
       }
     }
+    return bestId;
+  }
 
+  /// Enter on a single selected (not editing) shape node: start inline editing
+  /// it, caret ready. No-op if the selection isn't a single shape.
+  void _editSelectedShape() {
+    final shape = _singleSelectedShape(_selectionBloc.state);
+    if (shape == null) return;
+    _beginShapeTextEditing(shape);
+  }
+
+  /// Cmd+Arrow with a single selected (not editing) node: jump to the nearest
+  /// node in [direction] and enter editing on it. No-op if nothing's selected or
+  /// none lie that way.
+  void _navigateToNode(Offset direction) {
+    final from = _singleSelectedShape(_selectionBloc.state);
+    if (from == null) return;
+    final bestId = _nearestNodeInDirection(from.id, direction);
     if (bestId == null) return;
+    _selectAndEditNode(bestId);
+  }
+
+  /// Cmd+Arrow while inline-editing: commit the current node's text, then jump
+  /// to the nearest node in [direction] and edit it — keyboard-only traversal
+  /// that stays in edit mode. Falls back to staying put if none lie that way.
+  void _navigateFromEditingShape(Offset direction) {
+    final editingId = _editingShapeObject?.id;
+    if (editingId == null) return;
+    final bestId = _nearestNodeInDirection(editingId, direction);
+    if (bestId == null) return; // nothing that way — keep editing current node
+    // Commit (force past the open-guard) before moving on, then edit the target.
+    _finishShapeTextEditing(force: true);
+    _selectAndEditNode(bestId);
+  }
+
+  /// Selects [id], centres it in view, and enters inline text editing on it
+  /// (deferred a frame so selection/rebuild settle before the editor attaches).
+  void _selectAndEditNode(String id) {
     _selectionBloc.add(SelectionReplaced(
       nodeIds: const {},
-      drawingObjectIds: {bestId},
+      drawingObjectIds: {id},
     ));
-    final landed = _canvasBloc.state.drawingObjects[bestId];
-    if (landed != null) _ensureRectVisible(landed.rect);
+    final obj = _canvasBloc.state.drawingObjects[id];
+    if (obj == null) return;
+    _ensureRectVisible(obj.rect);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _beginShapeTextEditing(obj);
+    });
   }
 
   /// Tab pressed while inline-editing a shape's text: commit the current text
@@ -4286,6 +4327,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                       )),
                     // Tab (grow graph rightward) is handled in the canvas
                     // Focus.onKeyEvent so it wins over focus traversal.
+                    // Enter on a selected (not editing) node starts editing it.
+                    const SingleActivator(LogicalKeyboardKey.enter): () =>
+                      _editSelectedShape(),
+                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
+                      _editSelectedShape(),
                     // Tidy: layered auto-layout to minimize edge crossings.
                     const SingleActivator(LogicalKeyboardKey.keyL,
                         meta: true, shift: true): _applyAutoLayout,
@@ -4765,6 +4811,30 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                             event.logicalKey == LogicalKeyboardKey.tab) {
                           _tabFromEditingShape();
                           return KeyEventResult.handled;
+                        }
+                        // Cmd/Ctrl+Arrow while editing: commit and jump to the
+                        // nearest node in that direction, editing it. Checked
+                        // before the Up/Down nudge so the modifier wins.
+                        if (event is KeyDownEvent &&
+                            (HardwareKeyboard.instance.isMetaPressed ||
+                                HardwareKeyboard.instance.isControlPressed)) {
+                          Offset? dir;
+                          if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+                            dir = const Offset(0, -1);
+                          } else if (event.logicalKey ==
+                              LogicalKeyboardKey.arrowDown) {
+                            dir = const Offset(0, 1);
+                          } else if (event.logicalKey ==
+                              LogicalKeyboardKey.arrowLeft) {
+                            dir = const Offset(-1, 0);
+                          } else if (event.logicalKey ==
+                              LogicalKeyboardKey.arrowRight) {
+                            dir = const Offset(1, 0);
+                          }
+                          if (dir != null) {
+                            _navigateFromEditingShape(dir);
+                            return KeyEventResult.handled;
+                          }
                         }
                         // Up/Down arrows move the node being edited (as they do
                         // for a selected, non-editing node) while staying in edit
