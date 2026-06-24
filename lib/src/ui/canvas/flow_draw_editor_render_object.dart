@@ -1270,23 +1270,18 @@ class FlowDrawEditorRenderBox extends RenderBox
             ..color = paint.color
             ..style = PaintingStyle.fill;
           if (obj.startAttachment != null) {
-            // Outward at the start points away from the node, toward the edge.
-            Offset startOutward;
-            if (pathType == LinkPathType.orthogonal &&
-                waypoints != null &&
-                waypoints.isNotEmpty) {
-              startOutward = waypoints.first - start;
-            } else {
-              startOutward = end - start;
-            }
+            // Outward = away from the attached node, i.e. node center → point.
+            final startOutward = startObjRect != null
+                ? start - startObjRect.center
+                : (waypoints != null && waypoints.isNotEmpty
+                    ? waypoints.first - start
+                    : end - start);
             _paintHalfDot(canvas, start, dotRadius, startOutward, dotPaint);
           }
           if (obj.endAttachment != null) {
-            // Outward at the end points away from the node, opposite the
-            // incoming segment.
-            final Offset endOutward = (pathType == LinkPathType.orthogonal)
-                ? (arrowControl != null ? end - arrowControl : end - start)
-                : end - controlPoint;
+            final endOutward = endObjRect != null
+                ? end - endObjRect.center
+                : (arrowControl != null ? end - arrowControl : end - start);
             _paintHalfDot(canvas, end, dotRadius, endOutward, dotPaint);
           }
           // Highlight the endpoint the user has picked for arrow-key movement.
@@ -1428,6 +1423,9 @@ class FlowDrawEditorRenderBox extends RenderBox
                   ..strokeJoin = objectPaint.strokeJoin)
                 : objectPaint);
 
+        Offset? startNodeCenter;
+        Offset? endNodeCenter;
+
         var start = obj.start;
         final startAttachment = obj.startAttachment;
         if (startAttachment != null) {
@@ -1437,6 +1435,7 @@ class FlowDrawEditorRenderBox extends RenderBox
           final Rect? targetRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
+          startNodeCenter = targetRect?.center;
 
           if (targetRect != null) {
             final relPos = startAttachment.relativePosition;
@@ -1463,6 +1462,7 @@ class FlowDrawEditorRenderBox extends RenderBox
           final Rect? targetRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
+          endNodeCenter = targetRect?.center;
 
           if (targetRect != null) {
             final relPos = endAttachment.relativePosition;
@@ -1496,10 +1496,16 @@ class FlowDrawEditorRenderBox extends RenderBox
             ..color = paint.color
             ..style = PaintingStyle.fill;
           if (obj.startAttachment != null) {
-            _paintHalfDot(canvas, start, dotRadius, controlPoint - start, dotPaint);
+            final startOutward = startNodeCenter != null
+                ? start - startNodeCenter
+                : controlPoint - start;
+            _paintHalfDot(canvas, start, dotRadius, startOutward, dotPaint);
           }
           if (obj.endAttachment != null) {
-            _paintHalfDot(canvas, end, dotRadius, end - controlPoint, dotPaint);
+            final endOutward = endNodeCenter != null
+                ? end - endNodeCenter
+                : end - controlPoint;
+            _paintHalfDot(canvas, end, dotRadius, endOutward, dotPaint);
           }
         }
 
@@ -2043,26 +2049,30 @@ class FlowDrawEditorRenderBox extends RenderBox
     }
   }
 
-  /// Draws a half-dot (semicircle) at an edge endpoint sitting on a node's
-  /// boundary. The flat (diameter) edge lies along the node boundary and the
-  /// bulge points outward, away from the node — [outward] is the direction
-  /// pointing away from the node (i.e. the direction the edge travels from the
+  /// Draws a half-dot (semicircle) at an edge endpoint on a node's boundary.
+  /// The flat (diameter) edge rests flush against the node boundary and the
+  /// bulge points outward, away from the node, so the dot sits entirely
+  /// outside the node and never overlaps it. [boundaryPoint] is the point on
+  /// the node edge; [outward] points away from the node (node center →
   /// endpoint). If [outward] is degenerate, falls back to a full dot.
   void _paintHalfDot(
     Canvas canvas,
-    Offset center,
+    Offset boundaryPoint,
     double radius,
     Offset outward,
     Paint paint,
   ) {
     final len = outward.distance;
     if (len < 1e-6) {
-      canvas.drawCircle(center, radius, paint);
+      canvas.drawCircle(boundaryPoint, radius, paint);
       return;
     }
-    // Angle pointing outward; the semicircle spans the half facing outward,
-    // i.e. from (angle - 90°) to (angle + 90°).
-    final angle = outward.direction;
+    final unit = outward / len;
+    // Push the arc's center out by one radius so the flat side lies on the
+    // boundary and the whole semicircle is outside the node.
+    final center = boundaryPoint + unit * radius;
+    final angle = unit.direction;
+    // Span the half facing outward: from (angle - 90°) sweeping 180°.
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       angle - pi / 2,
