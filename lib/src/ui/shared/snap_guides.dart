@@ -32,18 +32,23 @@ enum SnapGuideAxis { horizontal, vertical }
 /// Detects when a moving object aligns with other objects' edges or centers,
 /// providing visual guides and snapped positions.
 class AlignmentGuide {
-  /// Snap threshold in logical pixels.
-  static const double snapThreshold = 8.0;
+  /// Default snap threshold in logical (screen) pixels.
+  static const double snapThreshold = 6.0;
 
   /// Finds snap guides for a moving rect relative to other objects.
   ///
   /// [additionalRects] allows passing extra reference rects (e.g. node bounds)
   /// that are not part of the [allObjects] drawing-object map.
+  ///
+  /// [threshold] is the catch distance in world units. Callers should pass a
+  /// zoom-corrected value (screen-pixel threshold ÷ zoom) so the sticky band
+  /// stays a constant size on screen regardless of zoom.
   static List<SnapGuide> findGuides(
     Rect movingRect,
     Map<String, DrawingObject> allObjects,
     Set<String> excludeIds, {
     Map<String, Rect> additionalRects = const {},
+    double threshold = snapThreshold,
   }) {
     final guides = <SnapGuide>[];
     final movingCx = movingRect.center.dx;
@@ -56,12 +61,14 @@ class AlignmentGuide {
         continue;
       }
 
-      _checkRect(movingRect, movingCx, movingCy, obj.rect, entry.key, guides);
+      _checkRect(
+          movingRect, movingCx, movingCy, obj.rect, entry.key, guides, threshold);
     }
 
     for (final entry in additionalRects.entries) {
       if (excludeIds.contains(entry.key)) continue;
-      _checkRect(movingRect, movingCx, movingCy, entry.value, entry.key, guides);
+      _checkRect(movingRect, movingCx, movingCy, entry.value, entry.key, guides,
+          threshold);
     }
 
     return guides;
@@ -74,20 +81,21 @@ class AlignmentGuide {
     Rect ref,
     String refId,
     List<SnapGuide> guides,
+    double threshold,
   ) {
     // Vertical guides (x alignment)
-    _checkSnap(movingRect.left, ref.left, SnapGuideAxis.vertical, refId, guides);
-    _checkSnap(movingRect.right, ref.right, SnapGuideAxis.vertical, refId, guides);
-    _checkSnap(movingCx, ref.center.dx, SnapGuideAxis.vertical, refId, guides);
-    _checkSnap(movingRect.left, ref.right, SnapGuideAxis.vertical, refId, guides);
-    _checkSnap(movingRect.right, ref.left, SnapGuideAxis.vertical, refId, guides);
+    _checkSnap(movingRect.left, ref.left, SnapGuideAxis.vertical, refId, guides, threshold);
+    _checkSnap(movingRect.right, ref.right, SnapGuideAxis.vertical, refId, guides, threshold);
+    _checkSnap(movingCx, ref.center.dx, SnapGuideAxis.vertical, refId, guides, threshold);
+    _checkSnap(movingRect.left, ref.right, SnapGuideAxis.vertical, refId, guides, threshold);
+    _checkSnap(movingRect.right, ref.left, SnapGuideAxis.vertical, refId, guides, threshold);
 
     // Horizontal guides (y alignment)
-    _checkSnap(movingRect.top, ref.top, SnapGuideAxis.horizontal, refId, guides);
-    _checkSnap(movingRect.bottom, ref.bottom, SnapGuideAxis.horizontal, refId, guides);
-    _checkSnap(movingCy, ref.center.dy, SnapGuideAxis.horizontal, refId, guides);
-    _checkSnap(movingRect.top, ref.bottom, SnapGuideAxis.horizontal, refId, guides);
-    _checkSnap(movingRect.bottom, ref.top, SnapGuideAxis.horizontal, refId, guides);
+    _checkSnap(movingRect.top, ref.top, SnapGuideAxis.horizontal, refId, guides, threshold);
+    _checkSnap(movingRect.bottom, ref.bottom, SnapGuideAxis.horizontal, refId, guides, threshold);
+    _checkSnap(movingCy, ref.center.dy, SnapGuideAxis.horizontal, refId, guides, threshold);
+    _checkSnap(movingRect.top, ref.bottom, SnapGuideAxis.horizontal, refId, guides, threshold);
+    _checkSnap(movingRect.bottom, ref.top, SnapGuideAxis.horizontal, refId, guides, threshold);
   }
 
   static void _checkSnap(
@@ -96,9 +104,10 @@ class AlignmentGuide {
     SnapGuideAxis axis,
     String refId,
     List<SnapGuide> guides,
+    double threshold,
   ) {
     final diff = (movingValue - refValue).abs();
-    if (diff < snapThreshold) {
+    if (diff < threshold) {
       guides.add(SnapGuide(
         axis: axis,
         position: refValue,

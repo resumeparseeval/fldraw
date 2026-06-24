@@ -41,6 +41,53 @@ typedef SnapPoint = ({
 /// What the "Swap" action will do given the current selection.
 enum _SwapKind { none, nodes, endpoints }
 
+/// Given the [current] picked endpoint and the node it is attached to, returns
+/// the next ([dir] >= 0) or previous ([dir] < 0) endpoint attached to the SAME
+/// node, ordered clockwise around the node centre so up/down walks neighbours
+/// predictably. Returns null when there's nothing else to cycle to.
+SelectedEndpoint? nextEndpointOnNode({
+  required SelectedEndpoint current,
+  required String nodeId,
+  required Rect nodeRect,
+  required Map<String, DrawingObject> drawingObjects,
+  required int dir,
+}) {
+  final center = nodeRect.center;
+  final attached = <({SelectedEndpoint ep, Offset relPos})>[];
+  void consider(String edgeId, bool isStart, ObjectAttachment? att) {
+    if (att == null || att.objectId != nodeId) return;
+    attached.add((
+      ep: (objectId: edgeId, isStart: isStart),
+      relPos: att.relativePosition,
+    ));
+  }
+
+  for (final obj in drawingObjects.values) {
+    if (obj is ArrowObject) {
+      consider(obj.id, true, obj.startAttachment);
+      consider(obj.id, false, obj.endAttachment);
+    } else if (obj is LineObject) {
+      consider(obj.id, true, obj.startAttachment);
+      consider(obj.id, false, obj.endAttachment);
+    }
+  }
+  if (attached.length < 2) return null; // nothing to cycle to
+
+  double angleOf(Offset relPos) {
+    final p = nodeRect.topLeft +
+        Offset(nodeRect.width * relPos.dx, nodeRect.height * relPos.dy);
+    return (p - center).direction;
+  }
+  attached.sort((a, b) => angleOf(a.relPos).compareTo(angleOf(b.relPos)));
+
+  final curIdx = attached.indexWhere(
+      (e) => e.ep.objectId == current.objectId && e.ep.isStart == current.isStart);
+  if (curIdx < 0) return null;
+  final nextIdx =
+      (curIdx + (dir >= 0 ? 1 : -1) + attached.length) % attached.length;
+  return attached[nextIdx].ep;
+}
+
 class FlOverlayData {
   final Widget child;
   final double? top;
@@ -129,6 +176,17 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   SnapPoint? _hoveredSnapPoint;
   SnapPoint? _startSnapPoint;
   List<SnapGuide> _activeSnapGuides = const [];
+  /// Accumulated cursor travel past an active snap line, per axis. While an
+  /// object is held to a guide, the correction we feed back to the drag pins it
+  /// in place; this records how far the *cursor* has actually pushed beyond the
+  /// guide so we can release the snap once the user clearly intends to break
+  /// free (hysteresis), instead of staying glued until the cursor exits the
+  /// snap band entirely.
+  double _snapOvershootX = 0.0;
+  double _snapOvershootY = 0.0;
+  /// A short world-space (start, end) segment for the node-edge center guide
+  /// shown while dragging an edge endpoint near a node edge's midpoint.
+  (Offset, Offset)? _endpointCenterGuide;
 
   int _activePointers = 0;
   double _scaleStartZoom = 1.0;
@@ -497,9 +555,58 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     // Prefer any non-frame target; only snap to a frame when nothing else is
     // in range.
-    final SnapPoint? newSnapPoint = bestNonFrame ?? bestFrame;
+    SnapPoint? newSnapPoint = bestNonFrame ?? bestFrame;
 
-    if (newSnapPoint != _hoveredSnapPoint) {
+    // Edge-center guide: when dragging an endpoint and it lands near the MIDDLE
+    // of a node edge, snap it to the exact center and show a SHORT guide segment
+    // through the node's center, perpendicular to the edge being dragged (a
+    // horizontal edge -> the node's vertical center line, and vice-versa). This
+    // is a localized segment on the node, NOT the screen-spanning SnapGuide used
+    // for node alignment.
+    (Offset, Offset)? centerSegment;
+    final draggingEndpoint = _isResizing.handle == Handle.arrowStart ||
+        _isResizing.handle == Handle.arrowEnd;
+    if (draggingEndpoint && newSnapPoint != null) {
+      final targetRect = canvasState.nodes[newSnapPoint.objectId] != null
+          ? getNodeBoundsInWorld(canvasState.nodes[newSnapPoint.objectId]!)
+          : canvasState.drawingObjects[newSnapPoint.objectId]?.rect;
+      if (targetRect != null) {
+        final rp = newSnapPoint.relativePosition;
+        const double centerBand = 0.12; // fraction of the edge near the middle
+        final onHoriz = rp.dy < 0.02 || rp.dy > 0.98; // top/bottom edge
+        final onVert = rp.dx < 0.02 || rp.dx > 0.98; // left/right edge
+        // Extend the guide a little past the node so the center line reads
+        // clearly without spanning the whole canvas.
+        final overshoot = 0.25 * (onHoriz ? targetRect.height : targetRect.width);
+        if (onHoriz && (rp.dx - 0.5).abs() < centerBand) {
+          newSnapPoint = (
+            objectId: newSnapPoint.objectId,
+            worldPosition: targetRect.topLeft +
+                Offset(targetRect.width * 0.5, targetRect.height * rp.dy),
+            relativePosition: Offset(0.5, rp.dy),
+          );
+          // Vertical center line through the node.
+          centerSegment = (
+            Offset(targetRect.center.dx, targetRect.top - overshoot),
+            Offset(targetRect.center.dx, targetRect.bottom + overshoot),
+          );
+        } else if (onVert && (rp.dy - 0.5).abs() < centerBand) {
+          newSnapPoint = (
+            objectId: newSnapPoint.objectId,
+            worldPosition: targetRect.topLeft +
+                Offset(targetRect.width * rp.dx, targetRect.height * 0.5),
+            relativePosition: Offset(rp.dx, 0.5),
+          );
+          // Horizontal center line through the node.
+          centerSegment = (
+            Offset(targetRect.left - overshoot, targetRect.center.dy),
+            Offset(targetRect.right + overshoot, targetRect.center.dy),
+          );
+        }
+      }
+    }
+
+    if (newSnapPoint != _hoveredSnapPoint || centerSegment != _endpointCenterGuide) {
       // Always track the CURRENT nearest snap point (or null when the cursor
       // leaves every snap band). The old code returned early when both an
       // existing start-snap and a new snap were present, which froze
@@ -509,6 +616,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (shouldCheckForSnapping && _startSnapPoint == null && newSnapPoint != null) {
         _startSnapPoint = newSnapPoint;
       }
+      _endpointCenterGuide = centerSegment;
       setState(() {});
     }
   }
@@ -880,7 +988,20 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       return;
     }
     if (_hoveredHandle.handle != Handle.none) {
+      // Clicking an arrow/line endpoint handle also picks it as the selected
+      // endpoint, so the arrow keys can slide it along its node edge. (A drag
+      // still works — the drag-end re-attaches as before.)
+      if (_hoveredHandle.handle == Handle.arrowStart ||
+          _hoveredHandle.handle == Handle.arrowEnd) {
+        _selectionBloc.add(EndpointSelected((
+          objectId: _hoveredHandle.objectId,
+          isStart: _hoveredHandle.handle == Handle.arrowStart,
+        )));
+      }
       _isResizing = _hoveredHandle;
+      // Reset movement tracking so a pure tap (no drag) doesn't commit a change
+      // on pointer-up — guards against stale delta from a previous interaction.
+      _totalDragDelta = 0.0;
       _originalResizeRect =
           _canvasBloc.state.drawingObjects[_isResizing.objectId]?.rect;
       return;
@@ -961,6 +1082,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (_isRotating) {
       _handleObjectRotation(worldPos);
     } else if (_isResizing.handle != Handle.none) {
+      // Track movement so a pure tap (no real drag) on a handle doesn't commit
+      // a position change in _finalizeResizing.
+      _totalDragDelta += event.delta.distance;
       _handleObjectResizing(worldPos);
     } else if (_isDraggingSelection) {
       final dragDelta = event.delta / _canvasBloc.state.viewportZoom;
@@ -979,11 +1103,22 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           if (bounds != null) nodeRects[node.id] = bounds;
         }
 
+        // Catch distance in world units: hold a constant on-screen band by
+        // dividing the screen-pixel threshold by zoom, so it doesn't balloon
+        // when zoomed in.
+        final zoom = _canvasBloc.state.viewportZoom;
+        final worldThreshold = AlignmentGuide.snapThreshold / zoom;
+        // Once snapped, the user must drag this much further (in screen px) past
+        // the guide to break free — hysteresis that stops the object glueing to
+        // the line while the cursor drifts away.
+        final worldRelease = 10.0 / zoom;
+
         final guides = AlignmentGuide.findGuides(
           movingRect,
           _canvasBloc.state.drawingObjects,
           selectedIds,
           additionalRects: nodeRects,
+          threshold: worldThreshold,
         );
 
         // Find the closest snap per axis and apply correction.
@@ -1015,6 +1150,27 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
               bestDy = minDiff;
             }
           }
+        }
+
+        // Hysteresis: while an axis is snapped, accumulate the cursor's raw
+        // travel along that axis. Once it exceeds the release distance, drop the
+        // snap for this frame so the object follows the cursor instead of
+        // staying pinned. Reset the accumulator whenever the axis isn't snapped.
+        if (bestDx != null) {
+          _snapOvershootX += dragDelta.dx;
+          if (_snapOvershootX.abs() > worldRelease) {
+            bestDx = null;
+          }
+        } else {
+          _snapOvershootX = 0.0;
+        }
+        if (bestDy != null) {
+          _snapOvershootY += dragDelta.dy;
+          if (_snapOvershootY.abs() > worldRelease) {
+            bestDy = null;
+          }
+        } else {
+          _snapOvershootY = 0.0;
         }
 
         var snappedDelta = dragDelta;
@@ -1066,8 +1222,18 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (_isDrawing) _finalizeDrawing();
 
     if (_isResizing.handle != Handle.none) {
-      _finalizeResizing();
-      _canvasBloc.add(const ObjectsResizeEnded());
+      // Only commit a resize/endpoint move if the pointer actually moved. A pure
+      // tap on a handle must not mutate the object (tapping an endpoint just
+      // picks it — done on pointer-down — it must not jump under the cursor).
+      if (_totalDragDelta > 3.0) {
+        _finalizeResizing();
+        _canvasBloc.add(const ObjectsResizeEnded());
+      } else {
+        // Discard any transient preview from a micro-move below threshold.
+        if (_tempDrawingObject != null) {
+          setState(() => _tempDrawingObject = null);
+        }
+      }
     }
 
     if (_isRotating) {
@@ -1098,8 +1264,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _isDraggingSelection = false;
     _isResizing = (objectId: '', handle: Handle.none);
     _originalResizeRect = null;
-    if (_activeSnapGuides.isNotEmpty) {
-      setState(() => _activeSnapGuides = const []);
+    if (_activeSnapGuides.isNotEmpty || _endpointCenterGuide != null) {
+      setState(() {
+        _activeSnapGuides = const [];
+        _endpointCenterGuide = null;
+      });
     }
   }
 
@@ -1417,6 +1586,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         }
       }
       _totalDragDelta = 0.0;
+      _snapOvershootX = 0.0;
+      _snapOvershootY = 0.0;
       _isDraggingSelection = true;
       // Capture which nodes are being dragged so Alt/Cmd held during the move
       // can re-port their attached edges. Includes the hit node plus any other
@@ -3159,6 +3330,72 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _canvasBloc.add(ObjectsNudged(selectedIds, delta));
   }
 
+  /// Arrow-key handler. If an edge endpoint is picked, slide it along its node
+  /// edge ([endpointSlide]: -1 left / +1 right) or switch which endpoint is
+  /// picked ([endpointSwitch]: -1 up / +1 down). Otherwise fall back to nudging
+  /// the current object selection by [nudge].
+  void _onArrowKey(Offset nudge,
+      {int? endpointSlide, int? endpointSwitch, bool fine = false}) {
+    final sel = _selectionBloc.state.selectedEndpoint;
+    if (sel != null) {
+      if (endpointSlide != null) {
+        _canvasBloc.add(EndpointMovedAlongEdge(
+            sel.objectId, sel.isStart, endpointSlide,
+            fine: fine));
+        return;
+      }
+      if (endpointSwitch != null) {
+        _switchSelectedEndpoint(endpointSwitch);
+        return;
+      }
+    }
+    _nudgeSelection(nudge);
+  }
+
+  /// The node id a given endpoint is attached to, or null if unattached.
+  String? _endpointNodeId(SelectedEndpoint ep) {
+    final obj = _canvasBloc.state.drawingObjects[ep.objectId];
+    if (obj is ArrowObject) {
+      return (ep.isStart ? obj.startAttachment : obj.endAttachment)?.objectId;
+    }
+    if (obj is LineObject) {
+      return (ep.isStart ? obj.startAttachment : obj.endAttachment)?.objectId;
+    }
+    return null;
+  }
+
+  /// Cycles the picked endpoint to the next ([dir] > 0) or previous ([dir] < 0)
+  /// endpoint attached to the SAME node, ordered clockwise around the node so
+  /// up/down walks neighbours predictably. Falls back to toggling the current
+  /// edge's two ends if the endpoint isn't attached to a node.
+  void _switchSelectedEndpoint(int dir) {
+    final sel = _selectionBloc.state.selectedEndpoint;
+    if (sel == null) return;
+    final nodeId = _endpointNodeId(sel);
+    if (nodeId == null) {
+      // Unattached: just flip start <-> end of this edge.
+      _selectionBloc.add(
+          EndpointSelected((objectId: sel.objectId, isStart: !sel.isStart)));
+      return;
+    }
+
+    // Resolve the node rect to order endpoints by angle around its centre.
+    final cs = _canvasBloc.state;
+    final node = cs.nodes[nodeId];
+    final Rect? rect =
+        node != null ? getNodeBoundsInWorld(node) : cs.drawingObjects[nodeId]?.rect;
+    if (rect == null) return;
+
+    final next = nextEndpointOnNode(
+      current: sel,
+      nodeId: nodeId,
+      nodeRect: rect,
+      drawingObjects: cs.drawingObjects,
+      dir: dir,
+    );
+    if (next != null) _selectionBloc.add(EndpointSelected(next));
+  }
+
   void _beginTextEditing({TextObject? existingObject, Offset? at}) {
     if (existingObject == null && at == null) return;
 
@@ -3774,6 +4011,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                           nodeBuilder: widget.nodeBuilder,
                           snapHandlePosition: _hoveredSnapPoint?.worldPosition,
                           snapGuides: _activeSnapGuides,
+                          endpointCenterGuide: _endpointCenterGuide,
                           debugShowHitAreas: _debugShowHitAreas,
                         ),
                   ),
@@ -3942,23 +4180,29 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                       _canvasBloc.add(const GridToggled()),
                     const SingleActivator(LogicalKeyboardKey.keyG, control: true): () =>
                       _canvasBloc.add(const GridToggled()),
-                    // Nudge: arrow keys = 1 grid square, shift+arrow = 1px
+                    // Nudge: arrow keys = 1 grid square, shift+arrow = 1px.
+                    // When an edge endpoint is picked, the arrow keys instead
+                    // slide it along its node edge (L/R) or switch the picked
+                    // endpoint (U/D).
                     const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                      _nudgeSelection(const Offset(0, -kGridSize)),
+                      _onArrowKey(const Offset(0, -kGridSize), endpointSwitch: -1),
                     const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                      _nudgeSelection(const Offset(0, kGridSize)),
+                      _onArrowKey(const Offset(0, kGridSize), endpointSwitch: 1),
                     const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-                      _nudgeSelection(const Offset(-kGridSize, 0)),
+                      _onArrowKey(const Offset(-kGridSize, 0), endpointSlide: -1),
                     const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-                      _nudgeSelection(const Offset(kGridSize, 0)),
+                      _onArrowKey(const Offset(kGridSize, 0), endpointSlide: 1),
+                    // Shift+arrow = fine (1px) nudge. With an endpoint picked,
+                    // Shift+L/R slides it ~1px along its node edge; U/D still
+                    // switches the picked endpoint.
                     const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () =>
-                      _nudgeSelection(const Offset(0, -1)),
+                      _onArrowKey(const Offset(0, -1), endpointSwitch: -1),
                     const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () =>
-                      _nudgeSelection(const Offset(0, 1)),
+                      _onArrowKey(const Offset(0, 1), endpointSwitch: 1),
                     const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () =>
-                      _nudgeSelection(const Offset(-1, 0)),
+                      _onArrowKey(const Offset(-1, 0), endpointSlide: -1, fine: true),
                     const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () =>
-                      _nudgeSelection(const Offset(1, 0)),
+                      _onArrowKey(const Offset(1, 0), endpointSlide: 1, fine: true),
                   },
                   child: Focus(
                     focusNode: _canvasFocusNode,
