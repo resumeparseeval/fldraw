@@ -1496,10 +1496,44 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       drawingObjectIds: {newId},
     ));
     _toolBloc.add(const ToolSelected(EditorTool.arrow));
+    // Pan so the new node is comfortably in view — Tab can march the chain off
+    // the right edge, so follow it. Centring keeps room for the next Tab too.
+    _ensureRectVisible(newRect);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _beginShapeTextEditing(newObject);
     });
+  }
+
+  /// Pans the viewport so [worldRect] is centred on screen.
+  void _centerOnWorldPoint(Offset worldPoint) {
+    // Centring a world point P means viewportOffset == -P (see screenToWorld);
+    // CanvasPanned adds to the offset, so the delta is (-P - currentOffset).
+    final current = _canvasBloc.state.viewportOffset;
+    _canvasBloc.add(CanvasPanned(-worldPoint - current));
+  }
+
+  /// Pans only if [worldRect] isn't fully on-screen, then centres it. Avoids a
+  /// jarring pan when the rect is already comfortably visible.
+  void _ensureRectVisible(Rect worldRect) {
+    final size = _lastCanvasSize;
+    final zoom = _canvasBloc.state.viewportZoom;
+    final offset = _canvasBloc.state.viewportOffset;
+    if (size != null) {
+      // Visible world region (matches screenToWorld's viewport rect), inset a
+      // little so a node hugging the edge still counts as "needs panning".
+      final viewport = Rect.fromLTWH(
+        -size.width / 2 / zoom - offset.dx,
+        -size.height / 2 / zoom - offset.dy,
+        size.width / zoom,
+        size.height / zoom,
+      ).deflate(40 / zoom);
+      if (viewport.contains(worldRect.topLeft) &&
+          viewport.contains(worldRect.bottomRight)) {
+        return; // already fully visible
+      }
+    }
+    _centerOnWorldPoint(worldRect.center);
   }
 
   /// Prompts for [arrow]'s label text and commits the change (empty clears it).
@@ -3483,6 +3517,16 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _canvasBloc.add(ObjectsNudged(selectedIds, delta));
   }
 
+  /// Moves the node currently being inline-edited by [delta], staying in edit
+  /// mode. `_onObjectsNudged` shifts the live object instance in place (the same
+  /// one `_editingShapeObject` references) before copying it, so the inline
+  /// editor's Positioned re-reads the new rect on the next rebuild.
+  void _nudgeEditingShape(Offset delta) {
+    final id = _editingShapeObject?.id;
+    if (id == null) return;
+    _canvasBloc.add(ObjectsNudged({id}, delta));
+  }
+
   /// Arrow-key handler. If an edge endpoint is picked, slide it along its node
   /// edge ([endpointSlide]: -1 left / +1 right) or switch which endpoint is
   /// picked ([endpointSwitch]: -1 up / +1 down). Otherwise fall back to nudging
@@ -4650,6 +4694,21 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                         if (event is KeyDownEvent &&
                             event.logicalKey == LogicalKeyboardKey.tab) {
                           _tabFromEditingShape();
+                          return KeyEventResult.handled;
+                        }
+                        // Up/Down arrows move the node being edited (as they do
+                        // for a selected, non-editing node) while staying in edit
+                        // mode. Left/Right are NOT intercepted, so they keep
+                        // moving the text caret. Also handles key-repeat.
+                        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                            (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+                                event.logicalKey == LogicalKeyboardKey.arrowDown)) {
+                          final fine = HardwareKeyboard.instance.isShiftPressed;
+                          final step = fine ? 1.0 : kGridSize;
+                          final dy = event.logicalKey == LogicalKeyboardKey.arrowUp
+                              ? -step
+                              : step;
+                          _nudgeEditingShape(Offset(0, dy));
                           return KeyEventResult.handled;
                         }
                         return KeyEventResult.ignored;
