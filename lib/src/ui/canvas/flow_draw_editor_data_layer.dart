@@ -1426,6 +1426,58 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     return null;
   }
 
+  /// All shape nodes that keyboard navigation can land on, as (id, rect).
+  Iterable<(String, Rect)> _navigableShapes() sync* {
+    for (final obj in _canvasBloc.state.drawingObjects.values) {
+      if (obj is RectangleObject ||
+          obj is CircleObject ||
+          obj is DiamondObject ||
+          obj is ParallelogramObject) {
+        yield (obj.id, obj.rect);
+      }
+    }
+  }
+
+  /// Cmd+Arrow: jump the selection to the nearest shape node in [direction]
+  /// from the currently selected one. Considers only nodes that lie within a
+  /// 90° cone toward [direction], scoring by along-axis distance plus an
+  /// off-axis penalty so the most "in line" node wins. Re-centres the viewport
+  /// on the node it lands on. No-op if nothing's selected or none lie that way.
+  void _navigateToNode(Offset direction) {
+    final from = _singleSelectedShape(_selectionBloc.state);
+    if (from == null) return;
+    final origin = from.rect.center;
+
+    String? bestId;
+    double bestScore = double.infinity;
+    for (final (id, rect) in _navigableShapes()) {
+      if (id == from.id) continue;
+      final delta = rect.center - origin;
+      // Along-axis component must be positive (target is in the pressed
+      // direction); off-axis is the perpendicular spread.
+      final along = delta.dx * direction.dx + delta.dy * direction.dy;
+      if (along <= 0) continue;
+      final off = (delta.dx * direction.dy - delta.dy * direction.dx).abs();
+      // Inside the 90° cone: off-axis spread can't exceed along-axis distance.
+      if (off > along) continue;
+      // Prefer aligned (small off-axis) and near (small along) nodes; weight
+      // off-axis heavier so a node squarely in line beats a closer diagonal one.
+      final score = along + off * 2;
+      if (score < bestScore) {
+        bestScore = score;
+        bestId = id;
+      }
+    }
+
+    if (bestId == null) return;
+    _selectionBloc.add(SelectionReplaced(
+      nodeIds: const {},
+      drawingObjectIds: {bestId},
+    ));
+    final landed = _canvasBloc.state.drawingObjects[bestId];
+    if (landed != null) _ensureRectVisible(landed.rect);
+  }
+
   /// Tab pressed while inline-editing a shape's text: commit the current text
   /// without requiring Enter first, then chain a connected node to its right and
   /// edit that one. Lets the user build a chain of nodes from the keyboard alone.
@@ -4404,6 +4456,24 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                       _onArrowKey(const Offset(-1, 0), endpointSlide: -1, fine: true),
                     const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () =>
                       _onArrowKey(const Offset(1, 0), endpointSlide: 1, fine: true),
+                    // Cmd/Ctrl+arrow = jump the selection to the nearest node in
+                    // that direction (graph navigation, not movement).
+                    const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true): () =>
+                      _navigateToNode(const Offset(0, -1)),
+                    const SingleActivator(LogicalKeyboardKey.arrowDown, meta: true): () =>
+                      _navigateToNode(const Offset(0, 1)),
+                    const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
+                      _navigateToNode(const Offset(-1, 0)),
+                    const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
+                      _navigateToNode(const Offset(1, 0)),
+                    const SingleActivator(LogicalKeyboardKey.arrowUp, control: true): () =>
+                      _navigateToNode(const Offset(0, -1)),
+                    const SingleActivator(LogicalKeyboardKey.arrowDown, control: true): () =>
+                      _navigateToNode(const Offset(0, 1)),
+                    const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true): () =>
+                      _navigateToNode(const Offset(-1, 0)),
+                    const SingleActivator(LogicalKeyboardKey.arrowRight, control: true): () =>
+                      _navigateToNode(const Offset(1, 0)),
                   },
                   child: Focus(
                     focusNode: _canvasFocusNode,
