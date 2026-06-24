@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nodeline/nodeline.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:system_fonts/system_fonts.dart';
 
@@ -14,6 +15,20 @@ import 'package:system_fonts/system_fonts.dart';
 const String _kFileExtension = 'beziera';
 const String _kRecentFilesPrefsKey = 'beziera.recentFiles';
 const int _kMaxRecentFiles = 10;
+
+/// Autosave: the working document is mirrored to disk on every change so an
+/// app restart (or crash) never loses unsaved work — it's restored on launch.
+/// Only an explicit New discards it (with a warning).
+const String _kAutosaveFileName = 'autosave.beziera';
+
+/// Pref keys holding the autosaved doc's associated file path (so the title
+/// restores) and whether it had unsaved changes vs its on-disk file.
+const String _kAutosavePathPrefsKey = 'beziera.autosave.filePath';
+const String _kAutosaveDirtyPrefsKey = 'beziera.autosave.dirty';
+
+/// Debounce before writing the autosave after a change — long enough to coalesce
+/// a burst of edits, short enough that little is lost on a hard crash.
+const Duration _kAutosaveDebounce = Duration(milliseconds: 600);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,6 +94,13 @@ class _BezieraHomeState extends State<BezieraHome> {
   /// asynchronously, so we clear it on the next microtask after the change.
   bool _suppressDirty = false;
 
+  /// Debounce timer for autosave writes.
+  Timer? _autosaveTimer;
+
+  /// True until the first canvas emission settles, so restoring the autosaved
+  /// document on launch doesn't immediately re-trigger an autosave write.
+  bool _restoring = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +109,12 @@ class _BezieraHomeState extends State<BezieraHome> {
     // picks actually renders. Names are already registered synchronously at
     // startup, so the picker is populated immediately; glyphs stream in.
     _loadAllFontGlyphs();
+  }
+
+  @override
+  void dispose() {
+    _autosaveTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadAllFontGlyphs() async {
@@ -115,6 +143,87 @@ class _BezieraHomeState extends State<BezieraHome> {
     setState(() => _recentFiles = updated);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_kRecentFilesPrefsKey, updated);
+  }
+
+  // --- Autosave ---------------------------------------------------------
+
+  Future<String> _autosavePath() async {
+    final dir = await getApplicationSupportDirectory();
+    return p.join(dir.path, _kAutosaveFileName);
+  }
+
+  /// Schedules a debounced autosave of the current canvas. Called on every
+  /// canvas change so unsaved work survives a restart or crash.
+  void _scheduleAutosave() {
+    _autosaveTimer?.cancel();
+    _autosaveTimer = Timer(_kAutosaveDebounce, _writeAutosave);
+  }
+
+  Future<void> _writeAutosave() async {
+    if (_controller == null) return;
+    try {
+      final json = await _serialize();
+      final path = await _autosavePath();
+      await File(path).writeAsString(json);
+      final prefs = await SharedPreferences.getInstance();
+      if (_filePath != null) {
+        await prefs.setString(_kAutosavePathPrefsKey, _filePath!);
+      } else {
+        await prefs.remove(_kAutosavePathPrefsKey);
+      }
+      await prefs.setBool(_kAutosaveDirtyPrefsKey, _dirty);
+    } catch (e) {
+      debugPrint('Beziera: autosave failed: $e');
+    }
+  }
+
+  /// Restores the autosaved document on launch, if any. Returns true if a
+  /// document was restored. Runs after the controller is created.
+  Future<bool> _restoreAutosave() async {
+    if (_controller == null) return false;
+    try {
+      final path = await _autosavePath();
+      final file = File(path);
+      if (!file.existsSync()) return false;
+      final contents = await file.readAsString();
+      if (contents.trim().isEmpty) return false;
+      final data = jsonDecode(contents) as Map<String, dynamic>;
+      final prefs = await SharedPreferences.getInstance();
+      final restoredPath = prefs.getString(_kAutosavePathPrefsKey);
+      final wasDirty = prefs.getBool(_kAutosaveDirtyPrefsKey) ?? true;
+
+      _restoring = true;
+      _suppressDirty = true;
+      _controller!.loadProject(data);
+      setState(() {
+        _filePath = restoredPath;
+        _dirty = wasDirty;
+      });
+      // Release the guards after the load emission settles.
+      Future.delayed(const Duration(milliseconds: 80), () {
+        _suppressDirty = false;
+        _restoring = false;
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Beziera: could not restore autosave: $e');
+      return false;
+    }
+  }
+
+  /// Deletes the autosave file and its prefs — used when the user explicitly
+  /// discards via New, so the next launch starts blank.
+  Future<void> _clearAutosave() async {
+    _autosaveTimer?.cancel();
+    try {
+      final file = File(await _autosavePath());
+      if (file.existsSync()) await file.delete();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kAutosavePathPrefsKey);
+      await prefs.remove(_kAutosaveDirtyPrefsKey);
+    } catch (e) {
+      debugPrint('Beziera: could not clear autosave: $e');
+    }
   }
 
   // --- Document title --------------------------------------------------
@@ -168,11 +277,52 @@ class _BezieraHomeState extends State<BezieraHome> {
   }
 
   Future<void> _newDocument() async {
-    if (!await _confirmDiscardIfDirty()) return;
+    // New is the explicit "throw away" action — warn before discarding the
+    // current (autosaved) graph so it isn't lost by accident.
+    if (!await _confirmDiscardForNew()) return;
+    await _clearAutosave();
     _applyDocumentChange(() {
       _controller!.createNewProject();
       _filePath = null;
     });
+  }
+
+  /// Warns that starting a new document discards the current graph. Returns true
+  /// to proceed. Offers to Save first if the doc has a file path / unsaved work.
+  Future<bool> _confirmDiscardForNew() async {
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Start a new document?'),
+        content: Text(
+          _filePath == null
+              ? 'Your current graph "$_documentName" will be discarded. '
+                  'This can\'t be undone.'
+              : 'Unsaved changes to "$_documentName" will be discarded. '
+                  'This can\'t be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          if (_dirty || _filePath != null)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, null),
+              child: const Text('Save first…'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    if (proceed == null) {
+      // "Save first…" — save, then proceed only if the save succeeded.
+      return _save();
+    }
+    return proceed;
   }
 
   Future<void> _open() async {
@@ -235,6 +385,9 @@ class _BezieraHomeState extends State<BezieraHome> {
         _dirty = false;
       });
       await _rememberRecentFile(path);
+      // Refresh the autosave so its associated path + clean state match the
+      // explicit save (Save doesn't emit a canvas change to trigger it).
+      await _writeAutosave();
       return true;
     } catch (e) {
       _showError('Could not save file', '$e');
@@ -263,9 +416,14 @@ class _BezieraHomeState extends State<BezieraHome> {
 
   void _onControllerCreated(FlowDrawController controller) {
     _controller = controller;
+    // Bring back whatever was on the canvas when the app last closed.
+    _restoreAutosave();
   }
 
   void _onCanvasChanged(CanvasState state) {
+    // Always mirror the canvas to the autosave file (even for our own
+    // load/new and viewport changes) so a restart restores the exact state.
+    if (!_restoring) _scheduleAutosave();
     // Ignore emissions caused by our own load/new (not real user edits).
     if (_suppressDirty) return;
     // Any canvas emission after a load/new/save means the user edited; mark

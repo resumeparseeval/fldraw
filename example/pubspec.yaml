@@ -20,6 +20,8 @@ dependencies:
   # Persist recent-files list across launches.
   shared_preferences: ^2.3.5
   path: ^1.9.0
+  # Application-support directory for the autosave file.
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
