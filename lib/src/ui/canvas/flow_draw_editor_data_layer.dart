@@ -1426,6 +1426,20 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     return null;
   }
 
+  /// Tab pressed while inline-editing a shape's text: commit the current text
+  /// without requiring Enter first, then chain a connected node to its right and
+  /// edit that one. Lets the user build a chain of nodes from the keyboard alone.
+  void _tabFromEditingShape() {
+    final editingId = _editingShapeObject?.id;
+    if (editingId == null) return;
+    // Force-commit even if the editor opened <500ms ago (the open-guard would
+    // otherwise swallow this), then read back the now-committed source object.
+    _finishShapeTextEditing(force: true);
+    final source = _canvasBloc.state.drawingObjects[editingId];
+    if (source == null) return;
+    _createConnectedNodeFrom(source);
+  }
+
   /// When a single shape node is selected, creates a sibling node immediately to
   /// its right (same size, vertically aligned), connects the two with a directed
   /// arrow attached to both, selects the new node, and enters inline text editing
@@ -1433,7 +1447,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   void _createConnectedNodeToRight(SelectionState selectionState) {
     final source = _singleSelectedShape(selectionState);
     if (source == null) return;
+    _createConnectedNodeFrom(source);
+  }
 
+  /// Creates a same-size node to the right of [source], joins them with a
+  /// directed arrow attached to both, selects the new node and edits it.
+  void _createConnectedNodeFrom(DrawingObject source) {
     final srcRect = source.rect;
     // Horizontal gap roughly one node-width so the arrow has room to route.
     final gap = (srcRect.width * 0.8).clamp(60.0, 200.0);
@@ -4019,9 +4038,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     });
   }
 
-  void _finishShapeTextEditing() {
-    // Ignore dismiss if editor just opened (prevents event bleeding)
-    if (_shapeEditOpenedAt != null &&
+  void _finishShapeTextEditing({bool force = false}) {
+    // Ignore dismiss if editor just opened (prevents event bleeding) — unless
+    // forced (e.g. Tab explicitly commits and chains to a new node).
+    if (!force &&
+        _shapeEditOpenedAt != null &&
         DateTime.now().difference(_shapeEditOpenedAt!).inMilliseconds < 500) {
       return;
     }
@@ -4618,6 +4639,14 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                             !HardwareKeyboard.instance.isShiftPressed &&
                             !HardwareKeyboard.instance.isAltPressed) {
                           _finishShapeTextEditing();
+                          return KeyEventResult.handled;
+                        }
+                        // Tab while editing: commit this node's text, then chain
+                        // a connected node to its right and edit that one — so a
+                        // node needn't be finalized (Enter) before Tab works.
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.tab) {
+                          _tabFromEditingShape();
                           return KeyEventResult.handled;
                         }
                         return KeyEventResult.ignored;
