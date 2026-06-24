@@ -1470,20 +1470,23 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         RectangleObject(id: newId, rect: newRect, creationZoom: source.creationZoom);
     _canvasBloc.add(DrawingObjectAdded(newObject));
 
-    // Directed arrow from the source node's centre to the new node's centre,
-    // attached to both so it re-routes when either node moves.
+    // Directed arrow from the source node's right edge to the new node's left
+    // edge, attached to both so it re-routes when either node moves. Anchoring
+    // to the facing sides (not the centres) gives the router a clean, direct
+    // horizontal path — a centre attachment (0.5,0.5) is side-ambiguous and the
+    // router defaults it to the left side, producing the looping detours.
     final arrow = ArrowObject(
       id: const Uuid().v4(),
-      start: srcRect.center,
-      end: newRect.center,
+      start: srcRect.centerRight,
+      end: newRect.centerLeft,
       pathType: LinkPathType.orthogonal,
       startAttachment: ObjectAttachment(
         objectId: source.id,
-        relativePosition: const Offset(0.5, 0.5),
+        relativePosition: const Offset(1.0, 0.5),
       ),
       endAttachment: ObjectAttachment(
         objectId: newId,
-        relativePosition: const Offset(0.5, 0.5),
+        relativePosition: const Offset(0.0, 0.5),
       ),
     );
     _canvasBloc.add(DrawingObjectAdded(arrow));
