@@ -6,6 +6,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:nodeline/src/core/node_editor/clipboard.dart';
 import 'package:nodeline/src/core/utils/orthogonal_router.dart';
+import 'package:nodeline/src/core/utils/renderbox.dart';
 import 'package:nodeline/src/core/utils/snap_utils.dart';
 import 'package:nodeline/src/core/utils/snackbar.dart';
 import 'package:nodeline/src/models/drawing_entities.dart';
@@ -79,6 +80,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
         ObjectsDragEnded e => _onObjectsDragEnded(e, emit),
         ObjectsNudged e => _onObjectsNudged(e, emit),
         DrawingObjectUpdated e => _onDrawingObjectUpdated(e, emit),
+        EndpointMovedAlongEdge e => _onEndpointMovedAlongEdge(e, emit),
         ObjectsResizeEnded e => _onObjectsResizeEnded(e, emit),
         ObjectsRotationEnded e => _onObjectsRotationEnded(e, emit),
         NodeValueUpdated e => _onNodeValueUpdated(e, emit),
@@ -302,6 +304,108 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     emit(state.copyWith(drawingObjects: newDrawingObjects));
   }
 
+  /// Resolves the world-space rect of the node or shape that [objectId] refers
+  /// to, or null if it no longer exists.
+  Rect? _attachmentRect(String objectId) {
+    final node = state.nodes[objectId];
+    if (node != null) return getNodeBoundsInWorld(node);
+    return state.drawingObjects[objectId]?.rect;
+  }
+
+  /// Clockwise distance (world units) from the rect's top-left corner to the
+  /// border point given by a 0..1 [rel] position. Snaps [rel] to the nearest
+  /// border edge first. Order: top (L→R), right (T→B), bottom (R→L), left (B→T).
+  static double _relToPerimeter(Offset rel, Rect rect) {
+    final w = rect.width, h = rect.height;
+    // Nearest edge: 0=top,1=right,2=bottom,3=left by distance of rel to it.
+    final d = [rel.dy, 1 - rel.dx, 1 - rel.dy, rel.dx]; // top,right,bottom,left
+    var side = 0;
+    for (int i = 1; i < 4; i++) {
+      if (d[i] < d[side]) side = i;
+    }
+    switch (side) {
+      case 0:
+        return rel.dx.clamp(0.0, 1.0) * w; // along top
+      case 1:
+        return w + rel.dy.clamp(0.0, 1.0) * h; // down right
+      case 2:
+        return w + h + (1 - rel.dx.clamp(0.0, 1.0)) * w; // back along bottom
+      default:
+        return 2 * w + h + (1 - rel.dy.clamp(0.0, 1.0)) * h; // up left
+    }
+  }
+
+  /// Inverse of [_relToPerimeter]: a clockwise perimeter distance [t] (already
+  /// wrapped into [0, perimeter)) back to a 0..1 border position.
+  static Offset _perimeterToRel(double t, Rect rect) {
+    final w = rect.width, h = rect.height;
+    if (t <= w) return Offset(t / w, 0.0); // top
+    t -= w;
+    if (t <= h) return Offset(1.0, t / h); // right
+    t -= h;
+    if (t <= w) return Offset(1.0 - t / w, 1.0); // bottom
+    t -= w;
+    return Offset(0.0, 1.0 - t / h); // left
+  }
+
+  void _onEndpointMovedAlongEdge(
+    EndpointMovedAlongEdge event,
+    Emitter<CanvasState> emit,
+  ) {
+    final obj = state.drawingObjects[event.objectId];
+    if (obj is! ArrowObject && obj is! LineObject) return;
+
+    final dynamic edge = obj;
+    final ObjectAttachment? attachment =
+        event.isStart ? edge.startAttachment : edge.endAttachment;
+    // Only attached endpoints slide along an edge.
+    if (attachment == null) return;
+    final rect = _attachmentRect(attachment.objectId);
+    if (rect == null || rect.width <= 0 || rect.height <= 0) return;
+
+    final rel = attachment.relativePosition;
+    // Model the endpoint as a distance travelled clockwise around the node's
+    // perimeter. Sliding past a corner continues onto the adjacent edge rather
+    // than stopping (full perimeter traversal, wrapping around).
+    final perimeter = 2 * (rect.width + rect.height);
+    if (perimeter <= 0) return;
+
+    // Step distance in world units. Coarse: ~1/12 of the average edge length
+    // (controllable); Fine (Shift): ~1px for precise placement.
+    final double avgEdge = perimeter / 4;
+    final double stepWorld = event.fine ? 1.0 : avgEdge / 12;
+    final double t0 = _relToPerimeter(rel, rect);
+    double t = (t0 + event.steps * stepWorld) % perimeter;
+    if (t < 0) t += perimeter;
+    final Offset newRel = _perimeterToRel(t, rect);
+    if ((newRel.dx - rel.dx).abs() < 1e-9 &&
+        (newRel.dy - rel.dy).abs() < 1e-9) {
+      return; // no movement
+    }
+
+    final newAttachment = ObjectAttachment(
+      objectId: attachment.objectId,
+      relativePosition: newRel,
+    );
+    final Offset newPoint = rect.topLeft +
+        Offset(rect.width * newRel.dx, rect.height * newRel.dy);
+
+    // This is a self-contained, one-shot edit. Discard any stale pre-operation
+    // snapshot left behind by an earlier DrawingObjectUpdated (e.g. a text-size
+    // or line-style change that never fired an "ended" event) so undo reverts
+    // ONLY this endpoint move, not back past that earlier change.
+    _preOperationSnapshot = null;
+    _pushToUndoStack(event, emit, state);
+    final DrawingObject updated = event.isStart
+        ? edge.copyWith(start: newPoint, startAttachment: newAttachment)
+        : edge.copyWith(end: newPoint, endAttachment: newAttachment);
+
+    final newDrawingObjects =
+        Map<String, DrawingObject>.from(state.drawingObjects);
+    newDrawingObjects[updated.id] = updated;
+    emit(state.copyWith(drawingObjects: newDrawingObjects));
+  }
+
   void _onNodeValueUpdated(NodeValueUpdated event, Emitter<CanvasState> emit) {
     _pushToUndoStack(event, emit, state);
     final newNodes = Map<String, NodeInstance>.from(state.nodes);
@@ -423,6 +527,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
         snapDelta = snapOffset(obj.rect.topLeft) - obj.rect.topLeft;
       }
     }
+
+    // If the drag ended held to an alignment guide, the selection is already
+    // exactly on another object's edge/center. Don't let the grid snap pull that
+    // axis off the guide (which would re-introduce the bend in attached edges).
+    if (event.alignedX) snapDelta = Offset(0, snapDelta.dy);
+    if (event.alignedY) snapDelta = Offset(snapDelta.dx, 0);
 
     if (snapDelta != Offset.zero) {
       for (final id in event.objectIds) {

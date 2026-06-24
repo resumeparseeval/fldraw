@@ -115,14 +115,28 @@ final class ObjectsDragged extends CanvasEvent {
 
 final class ObjectsDragEnded extends CanvasEvent {
   final Set<String> objectIds;
+
+  /// Whether the selection ended the drag held to an alignment guide on the
+  /// X axis (a vertical guide line). When true, the release-time grid snap must
+  /// not nudge the X position — doing so would pull the selection off the guide
+  /// it was visually aligned to, leaving a bend in attached edges.
+  final bool alignedX;
+
+  /// Same as [alignedX] for the Y axis (a horizontal guide line).
+  final bool alignedY;
+
   // This event marks the end of a drag and IS undoable.
-  const ObjectsDragEnded(this.objectIds) : super(isUndoable: true);
+  const ObjectsDragEnded(
+    this.objectIds, {
+    this.alignedX = false,
+    this.alignedY = false,
+  }) : super(isUndoable: true);
 
   @override
   String get description => 'Moved object(s)';
 
   @override
-  List<Object> get props => [objectIds];
+  List<Object> get props => [objectIds, alignedX, alignedY];
 }
 
 final class ObjectsNudged extends CanvasEvent {
@@ -144,6 +158,29 @@ final class DrawingObjectUpdated extends CanvasEvent {
 
   @override
   List<Object> get props => [object];
+}
+
+/// Slides one endpoint of an edge along the edge of the node it is attached to,
+/// keeping it connected. [isStart] picks the start endpoint, otherwise the end.
+/// [steps] is the signed number of nudge steps (negative = toward edge start,
+/// positive = toward edge end). When [fine] is true, each step is ~1 world
+/// pixel along the edge (for Shift+arrow precision); otherwise it's a coarse
+/// fraction of the edge length. Only affects endpoints with an attachment.
+final class EndpointMovedAlongEdge extends CanvasEvent {
+  final String objectId;
+  final bool isStart;
+  final int steps;
+  final bool fine;
+
+  const EndpointMovedAlongEdge(this.objectId, this.isStart, this.steps,
+      {this.fine = false})
+      : super(isUndoable: true);
+
+  @override
+  String get description => 'Moved endpoint along edge';
+
+  @override
+  List<Object> get props => [objectId, isStart, steps, fine];
 }
 
 final class ObjectsResizeEnded extends CanvasEvent {

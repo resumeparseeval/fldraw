@@ -1248,10 +1248,19 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     if (_isDraggingSelection) {
       if (_totalDragDelta > 3.0) {
+        // Tell the bloc which axes were held to an alignment guide so its
+        // release-time grid snap leaves those axes alone (otherwise it pulls the
+        // selection off the guide and bends attached edges).
+        final alignedX = _activeSnapGuides
+            .any((g) => g.axis == SnapGuideAxis.vertical);
+        final alignedY = _activeSnapGuides
+            .any((g) => g.axis == SnapGuideAxis.horizontal);
         _canvasBloc.add(ObjectsDragEnded(
           _selectionBloc.state.selectedNodeIds.union(
             _selectionBloc.state.selectedDrawingObjectIds,
           ),
+          alignedX: alignedX,
+          alignedY: alignedY,
         ));
       } else if (_pendingDeselect != null) {
         // Pure click (no real drag) on an already-selected object with the
