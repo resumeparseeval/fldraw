@@ -1,5 +1,5 @@
-name: nodeline_example
-description: "Minimal example for the nodeline infinite-canvas package."
+name: beziera
+description: "Beziera — a native macOS infinite-canvas drawing app built on nodeline."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -12,6 +12,14 @@ dependencies:
 
   nodeline:
     path: ../
+
+  # Native macOS open/save panels.
+  file_selector: ^1.0.3
+  # Enumerate & lazily load every installed system font.
+  system_fonts: ^1.0.1
+  # Persist recent-files list across launches.
+  shared_preferences: ^2.3.5
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:

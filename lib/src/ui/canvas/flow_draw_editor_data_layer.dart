@@ -1371,7 +1371,42 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (hit is ArrowObject) {
         _editArrowLabel(hit);
       }
+      return;
     }
+
+    // Nothing was hit: double-clicking empty canvas creates a new rectangle
+    // centred on the cursor and drops straight into text editing, so the user
+    // can start typing immediately. Matches the tap-to-create flow's sizing.
+    // Only in the select/arrow tool — a shape/line tool already creates on tap,
+    // so we don't want a competing double-click creation there.
+    if (_toolBloc.state.activeTool == EditorTool.arrow) {
+      _createNodeAndEdit(worldPos);
+    }
+  }
+
+  /// Creates a default rectangle centred on [worldPos] and immediately enters
+  /// inline text editing on it, leaving the caret ready for the user to type.
+  void _createNodeAndEdit(Offset worldPos) {
+    final iz = 1.0 / _canvasBloc.state.viewportZoom;
+    final cz = _canvasBloc.state.viewportZoom;
+    final rect = snapRect(
+      Rect.fromCenter(center: worldPos, width: 160 * iz, height: 100 * iz),
+    );
+    final newObject = RectangleObject(id: const Uuid().v4(), rect: rect, creationZoom: cz);
+    _canvasBloc.add(DrawingObjectAdded(newObject));
+    _selectionBloc.add(SelectionReplaced(
+      nodeIds: const {},
+      drawingObjectIds: {newObject.id},
+    ));
+    // Ensure we're in the default (arrow/select) tool so editing isn't
+    // interrupted by a still-active shape tool.
+    _toolBloc.add(const ToolSelected(EditorTool.arrow));
+    // Defer to the next frame so the bloc rebuilds (add + selection + tool)
+    // settle before the inline editor attaches — mirrors the tap-create path.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _beginShapeTextEditing(newObject);
+    });
   }
 
   /// Prompts for [arrow]'s label text and commits the change (empty clears it).

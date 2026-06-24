@@ -8,15 +8,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
 
-/// Font families offered by the editor. Limited to families that are
-/// guaranteed to render (the platform's built-in generic families plus the
-/// historical default), so a picked font never silently falls back.
-const List<String> kEditorFontFamilies = <String>[
+/// Font families offered by the editor.
+///
+/// Defaults to families that are guaranteed to render (the platform's built-in
+/// generic families plus the historical default), so a picked font never
+/// silently falls back. A host application can replace the contents at startup
+/// — e.g. Beziera loads every installed system font — via
+/// [setEditorFontFamilies]; the font-picker dropdowns read this list live, so
+/// they pick up whatever the host installs.
+final List<String> kEditorFontFamilies = <String>[
   'Courier',
   'sans-serif',
   'serif',
   'monospace',
 ];
+
+/// Replaces the editor's offered font families with [families].
+///
+/// The historical generic families are always kept at the top (so the default
+/// font and the generic fallbacks remain reachable), followed by [families]
+/// with duplicates removed. Empty or whitespace-only entries are dropped.
+void setEditorFontFamilies(Iterable<String> families) {
+  const generics = <String>['Courier', 'sans-serif', 'serif', 'monospace'];
+  final seen = <String>{...generics};
+  final merged = <String>[...generics];
+  for (final raw in families) {
+    final name = raw.trim();
+    if (name.isEmpty || !seen.add(name)) continue;
+    merged.add(name);
+  }
+  kEditorFontFamilies
+    ..clear()
+    ..addAll(merged);
+}
 
 /// The font family applied to shape text when nothing else has been chosen.
 const String kEditorDefaultFontFamily = 'Courier';

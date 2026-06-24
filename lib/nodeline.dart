@@ -37,6 +37,7 @@ export 'package:nodeline/src/models/drawing_entities.dart'
         workflowTools,
         effectiveShapeTextStyle,
         kEditorFontFamilies,
+        setEditorFontFamilies,
         kEditorDefaultFontFamily,
         kEditorDefaultFontSize,
         TextStylePreset,
