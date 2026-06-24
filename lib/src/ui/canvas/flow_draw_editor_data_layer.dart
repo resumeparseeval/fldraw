@@ -3641,19 +3641,33 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _rePortEdgesTouching(selectedIds);
   }
 
-  /// Re-points the ports of every edge touching any node in [movedIds] so both
-  /// endpoints face each other again — the same "face the moved box" logic used
-  /// during an Alt/Cmd drag, applied after an arrow-key move so a nudged node's
-  /// edges don't keep a now-wrong port and cross neighbours. Deferred to a
-  /// microtask because the preceding `ObjectsNudged` emits asynchronously, so
-  /// the moved rect must settle before we recompute the facing ports.
+  /// Reroutes the ports of every edge touching any node in [movedIds] to
+  /// minimize crossings, applied after an arrow-key move so a nudged node's
+  /// edges re-pick the side that avoids crossing neighbours (not merely the side
+  /// facing the other box). Reuses the `CrossingsMinimized` port-reassignment
+  /// (`changeConnectionPoints: true`). Deferred to a microtask because the
+  /// preceding `ObjectsNudged` emits asynchronously — the moved rect must settle
+  /// before crossings are recomputed.
   void _rePortEdgesTouching(Set<String> movedIds) {
     if (movedIds.isEmpty) return;
     Future.microtask(() {
       if (!mounted) return;
-      _reportDragNodeIds = movedIds;
-      _reportDraggedEdges(reportStart: true, reportEnd: true);
-      _reportDragNodeIds = const {};
+      // Collect arrows with an endpoint attached to any moved node.
+      final touchingArrowIds = <String>{};
+      for (final obj in _canvasBloc.state.drawingObjects.values) {
+        if (obj is! ArrowObject) continue;
+        final sId = obj.startAttachment?.objectId;
+        final eId = obj.endAttachment?.objectId;
+        if ((sId != null && movedIds.contains(sId)) ||
+            (eId != null && movedIds.contains(eId))) {
+          touchingArrowIds.add(obj.id);
+        }
+      }
+      if (touchingArrowIds.isEmpty) return;
+      _canvasBloc.add(CrossingsMinimized(
+        touchingArrowIds,
+        changeConnectionPoints: true,
+      ));
     });
   }
 
