@@ -1409,6 +1409,77 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     });
   }
 
+  /// Returns the [DrawingObject] for the lone selected shape node, or null if
+  /// the selection isn't exactly one rect/circle/diamond/parallelogram.
+  DrawingObject? _singleSelectedShape(SelectionState selectionState) {
+    final ids = selectionState.selectedDrawingObjectIds;
+    if (ids.length != 1 || selectionState.selectedNodeIds.isNotEmpty) {
+      return null;
+    }
+    final obj = _canvasBloc.state.drawingObjects[ids.first];
+    if (obj is RectangleObject ||
+        obj is CircleObject ||
+        obj is DiamondObject ||
+        obj is ParallelogramObject) {
+      return obj;
+    }
+    return null;
+  }
+
+  /// When a single shape node is selected, creates a sibling node immediately to
+  /// its right (same size, vertically aligned), connects the two with a directed
+  /// arrow attached to both, selects the new node, and enters inline text editing
+  /// — so Tab grows a graph rightward with the caret ready to type.
+  void _createConnectedNodeToRight(SelectionState selectionState) {
+    final source = _singleSelectedShape(selectionState);
+    if (source == null) return;
+
+    final srcRect = source.rect;
+    // Horizontal gap roughly one node-width so the arrow has room to route.
+    final gap = (srcRect.width * 0.8).clamp(60.0, 200.0);
+    final newRect = snapRect(
+      Rect.fromLTWH(
+        srcRect.right + gap,
+        srcRect.top,
+        srcRect.width,
+        srcRect.height,
+      ),
+    );
+
+    final newId = const Uuid().v4();
+    final newObject =
+        RectangleObject(id: newId, rect: newRect, creationZoom: source.creationZoom);
+    _canvasBloc.add(DrawingObjectAdded(newObject));
+
+    // Directed arrow from the source node's centre to the new node's centre,
+    // attached to both so it re-routes when either node moves.
+    final arrow = ArrowObject(
+      id: const Uuid().v4(),
+      start: srcRect.center,
+      end: newRect.center,
+      pathType: LinkPathType.orthogonal,
+      startAttachment: ObjectAttachment(
+        objectId: source.id,
+        relativePosition: const Offset(0.5, 0.5),
+      ),
+      endAttachment: ObjectAttachment(
+        objectId: newId,
+        relativePosition: const Offset(0.5, 0.5),
+      ),
+    );
+    _canvasBloc.add(DrawingObjectAdded(arrow));
+
+    _selectionBloc.add(SelectionReplaced(
+      nodeIds: const {},
+      drawingObjectIds: {newId},
+    ));
+    _toolBloc.add(const ToolSelected(EditorTool.arrow));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _beginShapeTextEditing(newObject);
+    });
+  }
+
   /// Prompts for [arrow]'s label text and commits the change (empty clears it).
   Future<void> _editArrowLabel(ArrowObject arrow) async {
     final controller = TextEditingController(text: arrow.arrowLabel ?? '');
@@ -4093,6 +4164,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                         nodeIds: selectionState.selectedNodeIds,
                         drawingObjectIds: selectionState.selectedDrawingObjectIds,
                       )),
+                    // Tab (grow graph rightward) is handled in the canvas
+                    // Focus.onKeyEvent so it wins over focus traversal.
                     // Tidy: layered auto-layout to minimize edge crossings.
                     const SingleActivator(LogicalKeyboardKey.keyL,
                         meta: true, shift: true): _applyAutoLayout,
@@ -4267,6 +4340,25 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                   child: Focus(
                     focusNode: _canvasFocusNode,
                     autofocus: true,
+                    // Intercept Tab before the focus traversal system consumes
+                    // it: when a single shape node is selected, Tab grows the
+                    // graph rightward instead of moving focus.
+                    onKeyEvent: (node, event) {
+                      if (event is! KeyDownEvent ||
+                          event.logicalKey != LogicalKeyboardKey.tab) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (_editingShapeObject != null ||
+                          _isEditingText ||
+                          _textInputHasFocus) {
+                        return KeyEventResult.ignored;
+                      }
+                      if (_singleSelectedShape(_selectionBloc.state) == null) {
+                        return KeyEventResult.ignored;
+                      }
+                      _createConnectedNodeToRight(_selectionBloc.state);
+                      return KeyEventResult.handled;
+                    },
                     child: MouseRegion(
                     cursor: _getCursor(toolState.activeTool),
                     onHover: (event) {
