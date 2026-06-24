@@ -55,6 +55,7 @@ class FlowDrawEditorRenderObjectWidget extends MultiChildRenderObjectWidget {
   final FlNodeBuilder? nodeBuilder;
   final Offset? snapHandlePosition;
   final List<SnapGuide> snapGuides;
+  final (Offset, Offset)? endpointCenterGuide;
 
   /// When true, paints the handle hit-test zones as a translucent overlay so
   /// you can see exactly which area each handle (especially arrow/line
@@ -73,6 +74,7 @@ class FlowDrawEditorRenderObjectWidget extends MultiChildRenderObjectWidget {
     this.nodeBuilder,
     this.snapHandlePosition,
     this.snapGuides = const [],
+    this.endpointCenterGuide,
     this.debugShowHitAreas = false,
   }) : super(
          children: canvasState.nodes.values.map((node) {
@@ -99,6 +101,7 @@ class FlowDrawEditorRenderObjectWidget extends MultiChildRenderObjectWidget {
       tempDrawingObject: tempDrawingObject,
       snapHandlePosition: snapHandlePosition,
       snapGuides: snapGuides,
+      endpointCenterGuide: endpointCenterGuide,
       debugShowHitAreas: debugShowHitAreas,
     );
   }
@@ -116,6 +119,7 @@ class FlowDrawEditorRenderObjectWidget extends MultiChildRenderObjectWidget {
       ..tempDrawingObject = tempDrawingObject
       ..snapHandlePosition = snapHandlePosition
       ..snapGuides = snapGuides
+      ..endpointCenterGuide = endpointCenterGuide
       ..debugShowHitAreas = debugShowHitAreas
       ..updateNodes(_getNodeDrawData());
   }
@@ -137,6 +141,11 @@ class FlowDrawEditorRenderBox extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, _ParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, _ParentData> {
+  // World-space cap on the squircle/edge corner radius. The on-screen radius is
+  // 36/zoom; when zoomed out that grows in world space and an over-large arc
+  // overshoots the router's standoff (cramped arrowheads / loopy detours). Cap
+  // at half the router stub (80) so a corner always fits with room on each side.
+  static const double _maxCornerRadiusWorld = 40.0;
   FlowDrawEditorRenderBox({
     required FlowDrawEditorStyle style,
     required FragmentShader gridShader,
@@ -147,6 +156,7 @@ class FlowDrawEditorRenderBox extends RenderBox
     required this.tempDrawingObject,
     this.snapHandlePosition,
     List<SnapGuide> snapGuides = const [],
+    (Offset, Offset)? endpointCenterGuide,
     bool debugShowHitAreas = false,
   }) : _style = style,
        _debugShowHitAreas = debugShowHitAreas,
@@ -154,7 +164,8 @@ class FlowDrawEditorRenderBox extends RenderBox
        _canvasState = canvasState,
        _selectionState = selectionState,
        _selectionArea = selectionArea,
-       _snapGuides = snapGuides {
+       _snapGuides = snapGuides,
+       _endpointCenterGuide = endpointCenterGuide {
     _loadGridShader();
     updateNodes(nodesData);
   }
@@ -201,6 +212,16 @@ class FlowDrawEditorRenderBox extends RenderBox
   set snapGuides(List<SnapGuide> value) {
     if (identical(_snapGuides, value)) return;
     _snapGuides = value;
+    markNeedsPaint();
+  }
+
+  (Offset, Offset)? _endpointCenterGuide;
+
+  (Offset, Offset)? get endpointCenterGuide => _endpointCenterGuide;
+
+  set endpointCenterGuide((Offset, Offset)? value) {
+    if (_endpointCenterGuide == value) return;
+    _endpointCenterGuide = value;
     markNeedsPaint();
   }
 
@@ -429,6 +450,17 @@ class FlowDrawEditorRenderBox extends RenderBox
   /// screen-pixel size (e.g. strokeWidth * iz * zoom = strokeWidth screen px).
   double get clampedInverseZoom => 1.0 / zoom;
 
+  /// A gentle on-screen down-scale for strokes and arrowheads when zoomed out,
+  /// so dense diagrams de-crowd at small zoom without the lines/heads getting
+  /// too thin. 1.0 at zoom >= [_lineScaleZoom]; tapers linearly to [_minLineScale]
+  /// as zoom drops to 0.
+  static const double _lineScaleZoom = 0.6;
+  static const double _minLineScale = 0.7;
+  double get lineScale => zoom >= _lineScaleZoom
+      ? 1.0
+      : (_minLineScale +
+          (1.0 - _minLineScale) * (zoom / _lineScaleZoom)).clamp(_minLineScale, 1.0);
+
   get drawingObjects => canvasState.drawingObjects;
 
   void _paintGrid(Canvas canvas, Rect viewport) {
@@ -542,6 +574,16 @@ class FlowDrawEditorRenderBox extends RenderBox
 
   void _paintSnapGuides(Canvas canvas, Rect viewport) {
     AlignmentGuide.paintGuides(canvas, _snapGuides, viewport);
+
+    // Localized node-edge center guide while dragging an endpoint.
+    final seg = _endpointCenterGuide;
+    if (seg != null) {
+      final paint = Paint()
+        ..color = const Color(0xFF2196F3)
+        ..strokeWidth = 1.0 * clampedInverseZoom
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(seg.$1, seg.$2, paint);
+    }
   }
 
   double get dpr => WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
@@ -626,10 +668,11 @@ class FlowDrawEditorRenderBox extends RenderBox
 
   void _paintDrawingObjects(Canvas canvas) {
     final iz = clampedInverseZoom;
+    final ls = lineScale;
     final Paint objectPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5 * iz;
+      ..strokeWidth = 1.5 * iz * ls;
     final Paint selectedBorderPaint = Paint()
       ..color = Colors.blue
       ..style = PaintingStyle.stroke
@@ -823,8 +866,9 @@ class FlowDrawEditorRenderBox extends RenderBox
           // Apple-style rounded superellipse (squircle) corners. Radius is a
           // fixed world-space value (no devicePixelRatio scaling) so the look is
           // consistent across displays and zoom levels.
-          final objCornerRadius =
-              obj.borderRadius > 0 ? obj.borderRadius : 12.0 / zoom;
+          final objCornerRadius = obj.borderRadius > 0
+              ? obj.borderRadius
+              : min(36.0 / zoom, _maxCornerRadiusWorld);
           final squircle = _squircleFor(obj.rect, objCornerRadius);
           final rectFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : noFillPaint;
           final rectStroke = obj.strokeColor != null ? (Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth) : objectPaint;
@@ -1226,10 +1270,34 @@ class FlowDrawEditorRenderBox extends RenderBox
             ..color = paint.color
             ..style = PaintingStyle.fill;
           if (obj.startAttachment != null) {
-            canvas.drawCircle(start, dotRadius, dotPaint);
+            // Outward at the start points away from the node, toward the edge.
+            Offset startOutward;
+            if (pathType == LinkPathType.orthogonal &&
+                waypoints != null &&
+                waypoints.isNotEmpty) {
+              startOutward = waypoints.first - start;
+            } else {
+              startOutward = end - start;
+            }
+            _paintHalfDot(canvas, start, dotRadius, startOutward, dotPaint);
           }
           if (obj.endAttachment != null) {
-            canvas.drawCircle(end, dotRadius, dotPaint);
+            // Outward at the end points away from the node, opposite the
+            // incoming segment.
+            final Offset endOutward = (pathType == LinkPathType.orthogonal)
+                ? (arrowControl != null ? end - arrowControl : end - start)
+                : end - controlPoint;
+            _paintHalfDot(canvas, end, dotRadius, endOutward, dotPaint);
+          }
+          // Highlight the endpoint the user has picked for arrow-key movement.
+          final sel = selectionState.selectedEndpoint;
+          if (sel != null && sel.objectId == obj.id) {
+            final ringPaint = Paint()
+              ..color = Colors.blue
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2.0 * clampedInverseZoom;
+            canvas.drawCircle(
+                sel.isStart ? start : end, dotRadius * 2.0, ringPaint);
           }
         }
 
@@ -1428,10 +1496,10 @@ class FlowDrawEditorRenderBox extends RenderBox
             ..color = paint.color
             ..style = PaintingStyle.fill;
           if (obj.startAttachment != null) {
-            canvas.drawCircle(start, dotRadius, dotPaint);
+            _paintHalfDot(canvas, start, dotRadius, controlPoint - start, dotPaint);
           }
           if (obj.endAttachment != null) {
-            canvas.drawCircle(end, dotRadius, dotPaint);
+            _paintHalfDot(canvas, end, dotRadius, end - controlPoint, dotPaint);
           }
         }
 
@@ -1975,6 +2043,35 @@ class FlowDrawEditorRenderBox extends RenderBox
     }
   }
 
+  /// Draws a half-dot (semicircle) at an edge endpoint sitting on a node's
+  /// boundary. The flat (diameter) edge lies along the node boundary and the
+  /// bulge points outward, away from the node — [outward] is the direction
+  /// pointing away from the node (i.e. the direction the edge travels from the
+  /// endpoint). If [outward] is degenerate, falls back to a full dot.
+  void _paintHalfDot(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Offset outward,
+    Paint paint,
+  ) {
+    final len = outward.distance;
+    if (len < 1e-6) {
+      canvas.drawCircle(center, radius, paint);
+      return;
+    }
+    // Angle pointing outward; the semicircle spans the half facing outward,
+    // i.e. from (angle - 90°) to (angle + 90°).
+    final angle = outward.direction;
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      angle - pi / 2,
+      pi,
+      true,
+      paint,
+    );
+  }
+
   void _paintArrowHead(
     Canvas canvas,
     Offset controlPoint,
@@ -1989,7 +2086,9 @@ class FlowDrawEditorRenderBox extends RenderBox
     // screen along with the diagram, instead of looking oversized.
     const double headConstantZoom = 0.6;
     final double headZoomFactor = 1.0 / max(zoom, headConstantZoom);
-    final double arrowSize = 7.0 * dpr * headZoomFactor;
+    // lineScale gives an extra gentle shrink when zoomed out so the head doesn't
+    // crowd a neighbouring connector entering the same node.
+    final double arrowSize = 7.0 * dpr * headZoomFactor * lineScale;
     const double arrowAngle = 25 * (pi / 180);
 
     final lineVector = end - controlPoint;
@@ -2053,7 +2152,10 @@ class FlowDrawEditorRenderBox extends RenderBox
     }
 
     // Fixed world-space radius (see _paintOrthogonalPath for why dpr is gone).
-    final double cornerRadius = 12.0 / zoom;
+    // Matches the node squircle corner radius. Capped in world space so the
+    // arc can't outgrow the router's standoff when zoomed out (an over-large
+    // corner overshoots into the arrowhead / forces loopy detours).
+    final double cornerRadius = min(36.0 / zoom, _maxCornerRadiusWorld);
     final Path path = Path();
     path.moveTo(allPoints[0].dx, allPoints[0].dy);
 
@@ -2144,7 +2246,9 @@ class FlowDrawEditorRenderBox extends RenderBox
     // bends bow into each other and enclose a lens/eye artifact where routes
     // cross). It's still clamped per-corner to half the shorter adjacent
     // segment below, so tight corners stay tight.
-    final double cornerRadius = 12.0 / zoom;
+    // Matches the node squircle corner radius, capped in world space (see
+    // _buildOrthogonalPath) so the arc fits the router's standoff at low zoom.
+    final double cornerRadius = min(36.0 / zoom, _maxCornerRadiusWorld);
     final Path path = Path();
     path.moveTo(allPoints[0].dx, allPoints[0].dy);
 
