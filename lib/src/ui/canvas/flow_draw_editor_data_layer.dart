@@ -1604,12 +1604,18 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       _snapOvershootX = 0.0;
       _snapOvershootY = 0.0;
       _isDraggingSelection = true;
-      // Capture which nodes are being dragged so Alt/Cmd held during the move
-      // can re-port their attached edges. Includes the hit node plus any other
-      // selected nodes that move with it.
-      final selectedNodes = {..._selectionBloc.state.selectedNodeIds};
-      if (isNode) selectedNodes.add(hitObjectId);
-      _reportDragNodeIds = selectedNodes;
+      // Capture which entities are being dragged so Alt/Cmd held during the move
+      // can re-port their attached edges. Boxes can be NodeInstances *or* plain
+      // DrawingObjects (rectangles/figures), and edges attach to either by id —
+      // so collect both. Also include the just-hit id directly: the selection
+      // bloc update we may have dispatched above is async and won't be reflected
+      // in its state yet this frame.
+      final draggedEntities = {
+        ..._selectionBloc.state.selectedNodeIds,
+        ..._selectionBloc.state.selectedDrawingObjectIds,
+        hitObjectId,
+      };
+      _reportDragNodeIds = draggedEntities;
       return;
     }
 
@@ -2780,12 +2786,14 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     return d.dx >= 0 ? right : left;
   }
 
-  /// Move-mode helper: while a node is being dragged, re-point its attached
-  /// edges to the node side facing the other endpoint. [reportStart] handles
-  /// edges whose origin (start) is attached to a dragged node; [reportEnd]
-  /// handles edges whose destination (end) is attached to one. Only edges
-  /// touching a dragged node are affected, and we only emit an update when a
-  /// port actually changes so the move stays cheap.
+  /// Move-mode helper: while a box (node *or* drawing object) is being dragged,
+  /// re-point its attached edges so both endpoints face each other. [reportStart]
+  /// qualifies edges whose origin (start) is attached to a dragged box;
+  /// [reportEnd] qualifies edges whose destination (end) is attached to one. An
+  /// edge qualifying on either end re-ports *both* its endpoints (moving one box
+  /// changes the geometry for both sides). Only edges touching a dragged box are
+  /// affected, and we only emit an update when a port actually changes so the
+  /// move stays cheap.
   void _reportDraggedEdges({required bool reportStart, required bool reportEnd}) {
     final dragged = _reportDragNodeIds;
     for (final obj in _canvasBloc.state.drawingObjects.values) {
@@ -2802,10 +2810,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final eRect = _entityRect(eAtt.objectId);
       if (sRect == null || eRect == null) continue;
 
-      var newStart = sAtt.relativePosition;
-      var newEnd = eAtt.relativePosition;
-      if (startOnDragged) newStart = _facingPort(sRect, eRect);
-      if (endOnDragged) newEnd = _facingPort(eRect, sRect);
+      // Moving either box changes the geometry between the two, so re-port BOTH
+      // endpoints to face each other — not just the dragged end. This keeps the
+      // origin box's port pointing at the box you moved, instead of leaving it
+      // on a now-wrong side.
+      final newStart = _facingPort(sRect, eRect);
+      final newEnd = _facingPort(eRect, sRect);
 
       if (newStart == sAtt.relativePosition && newEnd == eAtt.relativePosition) {
         continue;
