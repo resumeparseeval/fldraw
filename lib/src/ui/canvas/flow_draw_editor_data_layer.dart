@@ -1549,13 +1549,16 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     final srcRect = source.rect;
     // Horizontal gap roughly one node-width so the arrow has room to route.
     final gap = (srcRect.width * 0.8).clamp(60.0, 200.0);
-    final newRect = snapRect(
-      Rect.fromLTWH(
-        srcRect.right + gap,
-        srcRect.top,
-        srcRect.width,
-        srcRect.height,
-      ),
+    // Default slot: directly right of the source, same top. If that's already
+    // occupied (e.g. the source already has a child to its right because we
+    // navigated back and tabbed again), stack the new node DOWNWARD into the
+    // first free row instead of overlapping. The connecting arrow may reuse the
+    // same source port — overlapping ports are fine.
+    final newRect = _firstFreeSlot(
+      left: srcRect.right + gap,
+      top: srcRect.top,
+      width: srcRect.width,
+      height: srcRect.height,
     );
 
     final newId = const Uuid().v4();
@@ -1596,6 +1599,33 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (!mounted) return;
       _beginShapeTextEditing(newObject);
     });
+  }
+
+  /// Returns a snapped rect of [width]x[height] starting at ([left],[top]) and,
+  /// if that overlaps any existing shape node, stepping downward row by row
+  /// until it finds a slot clear of all existing shapes. Used so Tab never drops
+  /// a new node on top of an existing one.
+  Rect _firstFreeSlot({
+    required double left,
+    required double top,
+    required double width,
+    required double height,
+  }) {
+    final existing = [for (final (_, r) in _navigableShapes()) r];
+    // Vertical step = node height plus a comfortable gap.
+    final step = height + (height * 0.6).clamp(40.0, 160.0);
+    var candidateTop = top;
+    // Cap iterations so a pathological dense canvas can't loop forever; falls
+    // back to the last candidate (slight overlap) rather than hanging.
+    for (var i = 0; i < 200; i++) {
+      final candidate = snapRect(
+        Rect.fromLTWH(left, candidateTop, width, height),
+      );
+      final overlaps = existing.any((r) => r.overlaps(candidate));
+      if (!overlaps) return candidate;
+      candidateTop += step;
+    }
+    return snapRect(Rect.fromLTWH(left, candidateTop, width, height));
   }
 
   /// Pans the viewport so [worldRect] is centred on screen.
