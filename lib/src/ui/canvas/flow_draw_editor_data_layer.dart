@@ -3638,16 +3638,45 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     );
     if (selectedIds.isEmpty) return;
     _canvasBloc.add(ObjectsNudged(selectedIds, delta));
+    _rePortEdgesTouching(selectedIds);
+  }
+
+  /// Re-points the ports of every edge touching any node in [movedIds] so both
+  /// endpoints face each other again — the same "face the moved box" logic used
+  /// during an Alt/Cmd drag, applied after an arrow-key move so a nudged node's
+  /// edges don't keep a now-wrong port and cross neighbours. Deferred to a
+  /// microtask because the preceding `ObjectsNudged` emits asynchronously, so
+  /// the moved rect must settle before we recompute the facing ports.
+  void _rePortEdgesTouching(Set<String> movedIds) {
+    if (movedIds.isEmpty) return;
+    Future.microtask(() {
+      if (!mounted) return;
+      _reportDragNodeIds = movedIds;
+      _reportDraggedEdges(reportStart: true, reportEnd: true);
+      _reportDragNodeIds = const {};
+    });
   }
 
   /// Moves the node currently being inline-edited by [delta], staying in edit
-  /// mode. `_onObjectsNudged` shifts the live object instance in place (the same
-  /// one `_editingShapeObject` references) before copying it, so the inline
-  /// editor's Positioned re-reads the new rect on the next rebuild.
+  /// mode. Routes through `ObjectsNudged` so the underlying node repaints and
+  /// the move is undoable. `ObjectsNudged` replaces the instance with a
+  /// `copyWith()` copy (which preserves `text`), so we re-point
+  /// `_editingShapeObject` to that fresh copy — otherwise the in-flight text,
+  /// committed into `_editingShapeObject` on finish, would be written to the
+  /// discarded original and lost.
   void _nudgeEditingShape(Offset delta) {
     final id = _editingShapeObject?.id;
     if (id == null) return;
     _canvasBloc.add(ObjectsNudged({id}, delta));
+    // The event is processed on a microtask; re-sync the editing reference once
+    // the new state has been emitted, and re-port the node's edges so they keep
+    // facing it after the move.
+    Future.microtask(() {
+      if (!mounted) return;
+      final fresh = _canvasBloc.state.drawingObjects[id];
+      if (fresh != null) _editingShapeObject = fresh;
+    });
+    _rePortEdgesTouching({id});
   }
 
   /// Arrow-key handler. If an edge endpoint is picked, slide it along its node
@@ -4785,7 +4814,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   }
 
   Widget _buildInlineShapeTextEditor(CanvasState canvasState) {
-    final shapeObject = _editingShapeObject!;
+    // Always position from the canvas-state instance (the freshest rect): a
+    // nudge replaces the object via copyWith, and re-pointing _editingShapeObject
+    // happens a microtask later, so reading it here directly could lag a frame.
+    final shapeObject =
+        canvasState.drawingObjects[_editingShapeObject!.id] ?? _editingShapeObject!;
     final zoom = canvasState.viewportZoom;
     final offset = canvasState.viewportOffset;
 
