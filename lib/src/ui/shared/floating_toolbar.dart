@@ -1,11 +1,17 @@
 import 'package:nodeline/src/models/drawing_entities.dart';
 import 'package:nodeline/src/models/styles.dart';
+import 'package:nodeline/src/ui/shared/color_picker.dart';
+import 'package:nodeline/src/ui/shared/skin.dart';
 import 'package:flutter/material.dart';
 
-/// A contextual floating toolbar that appears near selected objects.
+/// A contextual floating toolbar that appears above the current selection.
 ///
-/// Shows relevant actions based on the type and number of selected objects.
-/// Inspired by AFFiNE's selection toolbar pattern.
+/// This is where *object* styling lives — duplicate / delete, stacking order,
+/// fill & stroke colour, line style, font, and (for arrows) direction — so the
+/// top-of-canvas tool island can stay focused on creating shapes.
+///
+/// It is skin-aware: every colour comes from [FlowDrawSkin] so it matches the
+/// rest of the monotone chrome instead of carrying its own hard-coded palette.
 class FloatingToolbar extends StatelessWidget {
   final Set<String> selectedIds;
   final Map<String, DrawingObject> drawingObjects;
@@ -16,42 +22,46 @@ class FloatingToolbar extends StatelessWidget {
   final VoidCallback? onSendToBack;
   final ValueChanged<LineStyle>? onLineStyleChanged;
   final LineStyle currentLineStyle;
-  /// Called when the user requests crossing minimization.
-  /// The [changeConnectionPoints] parameter controls whether port reassignment
-  /// is allowed (true) or only waypoint re-routing (false).
+
+  /// Called when the user requests crossing minimization. The bool controls
+  /// whether port reassignment is allowed (true) or only waypoint re-routing.
   final ValueChanged<bool>? onMinimizeCrossings;
 
-  /// The zoom level at which the single selected object was created.
-  /// When non-null and != 1.0, a zoom badge is shown in the toolbar.
   final double? creationZoom;
-
-  /// Called when the user taps the creation-zoom badge to jump to that zoom.
   final VoidCallback? onGoToCreationZoom;
 
-  /// Whether any selected object carries text/font (controls the font picker).
+  // --- Font ---------------------------------------------------------------
   final bool hasFontTarget;
-
-  /// The effective font family currently shown for the selection.
   final String currentFontFamily;
-
-  /// The effective font size currently shown for the selection.
   final double currentFontSize;
-
-  /// The global default family/size — text-style presets resolve against these
-  /// (preset family = global family, size = global size × scale).
   final String globalFontFamily;
   final double globalFontSize;
-
-  /// Whether the selection's font has been individually customized (controls
-  /// whether the "Reset to default" action is offered).
   final bool fontCustomized;
-
-  /// Called when the user picks a font family/size for the selection. Either
-  /// argument may be null to leave that axis unchanged.
   final void Function(String? family, double? size)? onFontChanged;
-
-  /// Called when the user resets the selection's font to the global default.
   final VoidCallback? onFontReset;
+
+  // --- Colour (NEW) -------------------------------------------------------
+  /// Whether the selection contains anything colourable.
+  final bool hasColorTarget;
+
+  /// The current fill of the selection (null = no fill / mixed).
+  final Color? currentFill;
+
+  /// Apply a fill. [clear] true clears the fill entirely.
+  final void Function(Color? color, bool clear)? onFillChanged;
+
+  /// Apply a stroke colour.
+  final ValueChanged<Color>? onStrokeChanged;
+
+  // --- Arrow direction (NEW) ---------------------------------------------
+  /// Whether the selection contains arrow(s).
+  final bool hasArrowTarget;
+
+  /// Whether the selected arrow(s) currently show a head.
+  final bool arrowDirected;
+
+  /// Toggle the arrowhead on the selected arrow(s).
+  final VoidCallback? onToggleArrowDirection;
 
   const FloatingToolbar({
     super.key,
@@ -75,61 +85,82 @@ class FloatingToolbar extends StatelessWidget {
     this.fontCustomized = false,
     this.onFontChanged,
     this.onFontReset,
+    this.hasColorTarget = false,
+    this.currentFill,
+    this.onFillChanged,
+    this.onStrokeChanged,
+    this.hasArrowTarget = false,
+    this.arrowDirected = false,
+    this.onToggleArrowDirection,
   });
 
   @override
   Widget build(BuildContext context) {
     if (selectedIds.isEmpty) return const SizedBox.shrink();
+    final t = FlowDrawSkin.of(context);
 
     return Positioned(
       left: position.dx,
-      top: position.dy - 50,
+      top: position.dy - 52,
       child: Material(
         color: Colors.transparent,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
           decoration: BoxDecoration(
-            color: const Color(0xFF2A2A2E),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            color: t.surface,
+            borderRadius: BorderRadius.circular(t.radius),
+            border: Border.all(color: t.border),
+            boxShadow: t.shadow,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _ToolbarButton(
-                icon: Icons.copy,
+              _Btn(
+                icon: Icons.content_copy,
                 tooltip: 'Duplicate',
                 onPressed: onDuplicate,
               ),
-              _ToolbarButton(
+              _Btn(
                 icon: Icons.delete_outline,
                 tooltip: 'Delete',
+                danger: true,
                 onPressed: onDelete,
               ),
-              const _ToolbarDivider(),
-              _ToolbarButton(
+              const _Divider(),
+              _Btn(
                 icon: Icons.flip_to_front,
-                tooltip: 'Bring to Front',
+                tooltip: 'Bring to front',
                 onPressed: onBringToFront,
               ),
-              _ToolbarButton(
+              _Btn(
                 icon: Icons.flip_to_back,
-                tooltip: 'Send to Back',
+                tooltip: 'Send to back',
                 onPressed: onSendToBack,
               ),
-              const _ToolbarDivider(),
+              if (hasColorTarget && onFillChanged != null) ...[
+                const _Divider(),
+                _ColorButton(
+                  currentFill: currentFill,
+                  onFillChanged: onFillChanged!,
+                  onStrokeChanged: onStrokeChanged,
+                ),
+              ],
+              const _Divider(),
               _LineStyleButton(
                 currentStyle: currentLineStyle,
                 onStyleChanged: onLineStyleChanged,
               ),
+              if (hasArrowTarget && onToggleArrowDirection != null) ...[
+                const _Divider(),
+                _Btn(
+                  icon: arrowDirected ? Icons.arrow_right_alt : Icons.remove,
+                  tooltip: arrowDirected ? 'Directed' : 'Undirected',
+                  active: arrowDirected,
+                  onPressed: onToggleArrowDirection,
+                ),
+              ],
               if (hasFontTarget && onFontChanged != null) ...[
-                const _ToolbarDivider(),
+                const _Divider(),
                 _FontButton(
                   family: currentFontFamily,
                   size: currentFontSize,
@@ -141,17 +172,12 @@ class FloatingToolbar extends StatelessWidget {
                 ),
               ],
               if (onMinimizeCrossings != null) ...[
-                const _ToolbarDivider(),
-                _MinimizeCrossingsButton(
-                  onMinimize: onMinimizeCrossings!,
-                ),
+                const _Divider(),
+                _MinimizeCrossingsButton(onMinimize: onMinimizeCrossings!),
               ],
               if (creationZoom != null && selectedIds.length == 1) ...[
-                const _ToolbarDivider(),
-                _ZoomInfoButton(
-                  zoom: creationZoom!,
-                  onGoTo: onGoToCreationZoom,
-                ),
+                const _Divider(),
+                _ZoomInfoButton(zoom: creationZoom!, onGoTo: onGoToCreationZoom),
               ],
             ],
           ),
@@ -165,43 +191,176 @@ class FloatingToolbar extends StatelessWidget {
 typedef ContextualToolbar = FloatingToolbar;
 typedef SelectionToolbar = FloatingToolbar;
 
-class _ToolbarButton extends StatelessWidget {
+/// Hover-aware square icon button matching the rest of the chrome.
+class _Btn extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
+  final bool active;
+  final bool danger;
 
-  const _ToolbarButton({
+  const _Btn({
     required this.icon,
     required this.tooltip,
     this.onPressed,
+    this.active = false,
+    this.danger = false,
   });
 
   @override
+  State<_Btn> createState() => _BtnState();
+}
+
+class _BtnState extends State<_Btn> {
+  bool _hover = false;
+
+  @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
+    final enabled = widget.onPressed != null;
+
+    Color fg;
+    if (!enabled) {
+      fg = t.faint;
+    } else if (widget.active) {
+      fg = t.accentForeground;
+    } else if (widget.danger) {
+      fg = t.danger.withValues(alpha: _hover ? 1 : 0.85);
+    } else {
+      fg = t.foreground.withValues(alpha: _hover ? 1 : 0.82);
+    }
+
+    Color bg = const Color(0x00000000);
+    if (widget.active) {
+      bg = t.accent;
+    } else if (_hover && enabled) {
+      bg = widget.danger ? t.danger.withValues(alpha: 0.12) : t.surfaceHover;
+    }
+
     return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(4),
-        onTap: onPressed,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18, color: Colors.white70),
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 300),
+      child: MouseRegion(
+        cursor:
+            enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onPressed,
+          child: Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(t.itemRadius),
+            ),
+            child: Icon(widget.icon, size: 18, color: fg),
+          ),
         ),
       ),
     );
   }
 }
 
-class _ToolbarDivider extends StatelessWidget {
-  const _ToolbarDivider();
-
+class _Divider extends StatelessWidget {
+  const _Divider();
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return Container(
       width: 1,
       height: 20,
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: Colors.white24,
+      color: t.border,
+    );
+  }
+}
+
+/// Fill + stroke colour control. Opens a small panel with the two pickers.
+class _ColorButton extends StatelessWidget {
+  final Color? currentFill;
+  final void Function(Color? color, bool clear) onFillChanged;
+  final ValueChanged<Color>? onStrokeChanged;
+
+  const _ColorButton({
+    required this.currentFill,
+    required this.onFillChanged,
+    this.onStrokeChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(t.surface),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(t.radius),
+          side: BorderSide(color: t.border),
+        )),
+      ),
+      builder: (context, controller, _) {
+        return Tooltip(
+          message: 'Fill & stroke',
+          waitDuration: const Duration(milliseconds: 300),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              child: Container(
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: currentFill ?? Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: t.muted, width: 1),
+                      ),
+                      child: currentFill == null
+                          ? Icon(Icons.format_color_fill,
+                              size: 10, color: t.muted)
+                          : null,
+                    ),
+                    Icon(Icons.expand_more, size: 14, color: t.muted),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      menuChildren: [
+        Container(
+          width: 220,
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              FillColorPicker(
+                currentColor: currentFill,
+                onColorChanged: (c) => onFillChanged(c, c == null),
+              ),
+              const SizedBox(height: 10),
+              if (onStrokeChanged != null)
+                StrokeColorPicker(
+                  currentColor: Colors.white,
+                  onColorChanged: onStrokeChanged!,
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -210,69 +369,76 @@ class _LineStyleButton extends StatelessWidget {
   final LineStyle currentStyle;
   final ValueChanged<LineStyle>? onStyleChanged;
 
-  const _LineStyleButton({
-    required this.currentStyle,
-    this.onStyleChanged,
-  });
+  const _LineStyleButton({required this.currentStyle, this.onStyleChanged});
 
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return PopupMenuButton<LineStyle>(
       onSelected: onStyleChanged,
-      tooltip: 'Line Style',
+      tooltip: 'Line style',
+      color: t.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(t.itemRadius),
+        side: BorderSide(color: t.border),
+      ),
       itemBuilder: (_) => [
-        _buildItem(LineStyle.solid, 'Solid'),
-        _buildItem(LineStyle.dashed, 'Dashed'),
-        _buildItem(LineStyle.dotted, 'Dotted'),
-        _buildItem(LineStyle.rough, 'Rough'),
+        _item(t, LineStyle.solid, 'Solid'),
+        _item(t, LineStyle.dashed, 'Dashed'),
+        _item(t, LineStyle.dotted, 'Dotted'),
+        _item(t, LineStyle.rough, 'Rough'),
       ],
-      child: Padding(
-        padding: const EdgeInsets.all(6),
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildStyleIcon(currentStyle),
-            const SizedBox(width: 2),
-            const Icon(Icons.arrow_drop_down, size: 14, color: Colors.white54),
+            _styleIcon(currentStyle, t.foreground),
+            Icon(Icons.expand_more, size: 14, color: t.muted),
           ],
         ),
       ),
     );
   }
 
-  PopupMenuItem<LineStyle> _buildItem(LineStyle style, String label) {
+  PopupMenuItem<LineStyle> _item(
+      FlowDrawTokens t, LineStyle style, String label) {
     return PopupMenuItem(
       value: style,
+      height: 36,
       child: Row(
         children: [
-          _buildStyleIcon(style),
-          const SizedBox(width: 8),
-          Text(label),
+          _styleIcon(style, t.foreground),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 13, color: t.foreground)),
           if (style == currentStyle) ...[
             const Spacer(),
-            const Icon(Icons.check, size: 16),
+            Icon(Icons.check, size: 15, color: t.accent),
           ],
         ],
       ),
     );
   }
 
-  static Widget _buildStyleIcon(LineStyle style) {
+  static Widget _styleIcon(LineStyle style, Color color) {
     return CustomPaint(
-      size: const Size(24, 18),
-      painter: _LineStylePainter(style),
+      size: const Size(26, 18),
+      painter: _LineStylePainter(style, color),
     );
   }
 }
 
 class _LineStylePainter extends CustomPainter {
   final LineStyle style;
-  _LineStylePainter(this.style);
+  final Color color;
+  _LineStylePainter(this.style, this.color);
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white70
+      ..color = color
       ..strokeWidth = 2.0
       ..style = PaintingStyle.stroke;
 
@@ -289,7 +455,8 @@ class _LineStylePainter extends CustomPainter {
       case LineStyle.dotted:
         double x = 0;
         while (x < size.width) {
-          canvas.drawCircle(Offset(x, y), 1.5, paint..style = PaintingStyle.fill);
+          canvas.drawCircle(
+              Offset(x, y), 1.5, paint..style = PaintingStyle.fill);
           x += 5;
         }
       case LineStyle.rough:
@@ -302,11 +469,11 @@ class _LineStylePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LineStylePainter old) => old.style != style;
+  bool shouldRepaint(_LineStylePainter old) =>
+      old.style != style || old.color != color;
 }
 
-/// Font picker for the selected shape(s): family choices, a size stepper, and
-/// (when the selection has been customized) a "Reset to default" action.
+/// Font picker for the selected shape(s).
 class _FontButton extends StatelessWidget {
   final String family;
   final double size;
@@ -328,28 +495,39 @@ class _FontButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(t.surface),
+        shape: WidgetStatePropertyAll(RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(t.radius),
+          side: BorderSide(color: t.border),
+        )),
+      ),
       builder: (context, controller, _) {
         return Tooltip(
           message: 'Font',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(4),
-            onTap: () =>
-                controller.isOpen ? controller.close() : controller.open(),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.text_fields, size: 18, color: Colors.white70),
-                  const SizedBox(width: 2),
-                  Text(
-                    '${size.round()}',
-                    style: const TextStyle(fontSize: 11, color: Colors.white70),
-                  ),
-                  const Icon(Icons.arrow_drop_down,
-                      size: 14, color: Colors.white54),
-                ],
+          waitDuration: const Duration(milliseconds: 300),
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () =>
+                  controller.isOpen ? controller.close() : controller.open(),
+              child: Container(
+                height: 32,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.center,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.text_fields, size: 17, color: t.foreground),
+                    const SizedBox(width: 4),
+                    Text('${size.round()}',
+                        style: TextStyle(fontSize: 12, color: t.foreground)),
+                    Icon(Icons.expand_more, size: 14, color: t.muted),
+                  ],
+                ),
               ),
             ),
           ),
@@ -370,8 +548,6 @@ class _FontButton extends StatelessWidget {
   }
 }
 
-/// The stateful body of the font menu — tracks the live size so repeated
-/// stepper taps accumulate while the menu stays open.
 class _FontMenuPanel extends StatefulWidget {
   final String family;
   final double size;
@@ -402,52 +578,45 @@ class _FontMenuPanelState extends State<_FontMenuPanel> {
   static const double _minSize = 6;
   static const double _maxSize = 96;
 
-  /// A preset's concrete size = global size × scale.
   double _presetSize(TextStylePreset p) => p.sizeFor(widget.globalSize);
 
-  /// Whether [preset] matches the current family + size. Presets use the global
-  /// family, so match against that.
   bool _isActivePreset(TextStylePreset preset) =>
       _family == widget.globalFamily &&
       (_presetSize(preset) - _size).abs() < 0.5;
 
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return Container(
-      width: 220,
+      width: 224,
       constraints: const BoxConstraints(maxHeight: 420),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: SingleChildScrollView(
         child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Text-style presets (Title / Heading 1 / … / Leaf node), Docs-style.
-          const Padding(
-            padding: EdgeInsets.only(bottom: 2),
-            child: Text('Text style',
-                style: TextStyle(fontSize: 11, color: Colors.white54)),
-          ),
-          for (final p in kTextStylePresets)
-            InkWell(
-              onTap: () {
-                final s = _presetSize(p).clamp(_minSize, _maxSize);
-                setState(() {
-                  _family = widget.globalFamily;
-                  _size = s;
-                });
-                widget.onChanged(widget.globalFamily, s);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child:
+                  Text('Text style', style: TextStyle(fontSize: 11, color: t.muted)),
+            ),
+            for (final p in kTextStylePresets)
+              _tapRow(
+                onTap: () {
+                  final s = _presetSize(p).clamp(_minSize, _maxSize);
+                  setState(() {
+                    _family = widget.globalFamily;
+                    _size = s.toDouble();
+                  });
+                  widget.onChanged(widget.globalFamily, s.toDouble());
+                },
                 child: Row(
                   children: [
                     Icon(
-                      _isActivePreset(p)
-                          ? Icons.check
-                          : Icons.text_fields,
+                      _isActivePreset(p) ? Icons.check : Icons.text_fields,
                       size: 14,
-                      color: _isActivePreset(p) ? null : Colors.white38,
+                      color: _isActivePreset(p) ? t.accent : t.faint,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -455,33 +624,28 @@ class _FontMenuPanelState extends State<_FontMenuPanel> {
                         p.label,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          // Preview in the global family; cap the rendered size
-                          // so big presets don't blow out the row.
+                          color: t.foreground,
                           fontFamily: widget.globalFamily,
                           fontSize: _presetSize(p).clamp(11, 18).toDouble(),
                         ),
                       ),
                     ),
                     Text('${_presetSize(p).round()}',
-                        style: const TextStyle(fontSize: 11, color: Colors.white38)),
+                        style: TextStyle(fontSize: 11, color: t.faint)),
                   ],
                 ),
               ),
+            _panelDivider(t),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text('Font', style: TextStyle(fontSize: 11, color: t.muted)),
             ),
-          const Divider(height: 12),
-          const Padding(
-            padding: EdgeInsets.only(bottom: 2),
-            child: Text('Font',
-                style: TextStyle(fontSize: 11, color: Colors.white54)),
-          ),
-          for (final f in kEditorFontFamilies)
-            InkWell(
-              onTap: () {
-                setState(() => _family = f);
-                widget.onChanged(f, null);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+            for (final f in kEditorFontFamilies)
+              _tapRow(
+                onTap: () {
+                  setState(() => _family = f);
+                  widget.onChanged(f, null);
+                },
                 child: Row(
                   children: [
                     Icon(
@@ -489,71 +653,83 @@ class _FontMenuPanelState extends State<_FontMenuPanel> {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_off,
                       size: 16,
+                      color: f == _family ? t.accent : t.muted,
                     ),
                     const SizedBox(width: 8),
-                    Text(f, style: TextStyle(fontSize: 13, fontFamily: f)),
+                    Text(f,
+                        style: TextStyle(
+                            fontSize: 13, fontFamily: f, color: t.foreground)),
                   ],
                 ),
               ),
+            _panelDivider(t),
+            Row(
+              children: [
+                Text('Size', style: TextStyle(fontSize: 12, color: t.foreground)),
+                const Spacer(),
+                _stepBtn(t, Icons.remove, () {
+                  setState(() => _size = (_size - 1).clamp(_minSize, _maxSize).toDouble());
+                  widget.onChanged(null, _size);
+                }),
+                SizedBox(
+                  width: 32,
+                  child: Text('${_size.round()}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: t.foreground)),
+                ),
+                _stepBtn(t, Icons.add, () {
+                  setState(() => _size = (_size + 1).clamp(_minSize, _maxSize).toDouble());
+                  widget.onChanged(null, _size);
+                }),
+              ],
             ),
-          const Divider(height: 12),
-          Row(
-            children: [
-              const Text('Size', style: TextStyle(fontSize: 12)),
-              const Spacer(),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                icon: const Icon(Icons.remove),
-                onPressed: () {
-                  setState(
-                      () => _size = (_size - 1).clamp(_minSize, _maxSize));
-                  widget.onChanged(null, _size);
-                },
-              ),
-              SizedBox(
-                width: 32,
-                child: Text('${_size.round()}',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 13)),
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                icon: const Icon(Icons.add),
-                onPressed: () {
-                  setState(
-                      () => _size = (_size + 1).clamp(_minSize, _maxSize));
-                  widget.onChanged(null, _size);
-                },
-              ),
-            ],
-          ),
-          if (widget.customized && widget.onReset != null) ...[
-            const Divider(height: 12),
-            InkWell(
-              onTap: widget.onReset,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 6),
+            if (widget.customized && widget.onReset != null) ...[
+              _panelDivider(t),
+              _tapRow(
+                onTap: widget.onReset!,
                 child: Row(
                   children: [
-                    Icon(Icons.restart_alt, size: 16),
-                    SizedBox(width: 8),
-                    Text('Reset to default', style: TextStyle(fontSize: 13)),
+                    Icon(Icons.restart_alt, size: 16, color: t.foreground),
+                    const SizedBox(width: 8),
+                    Text('Reset to default',
+                        style: TextStyle(fontSize: 13, color: t.foreground)),
                   ],
                 ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _tapRow({required VoidCallback onTap, required Widget child}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _panelDivider(FlowDrawTokens t) =>
+      Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 8), color: t.border);
+
+  Widget _stepBtn(FlowDrawTokens t, IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Icon(icon, size: 16, color: t.foreground),
       ),
     );
   }
 }
 
-/// A small badge showing the zoom level at which an object was created,
-/// with a tap action to return to that zoom level.
+/// A small badge showing the zoom level at which an object was created.
 class _ZoomInfoButton extends StatelessWidget {
   final double zoom;
   final VoidCallback? onGoTo;
@@ -568,20 +744,20 @@ class _ZoomInfoButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return Tooltip(
       message: 'Created at $_label — tap to go there',
-      child: InkWell(
-        onTap: onGoTo,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Text(
-            _label,
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.6),
-              fontFamily: 'monospace',
-            ),
+      waitDuration: const Duration(milliseconds: 300),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onGoTo,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            child: Text(_label,
+                style: TextStyle(
+                    fontSize: 11, color: t.muted, fontFamily: 'monospace')),
           ),
         ),
       ),
@@ -589,7 +765,7 @@ class _ZoomInfoButton extends StatelessWidget {
   }
 }
 
-/// A popup button that offers two crossing-minimization strategies.
+/// Two crossing-minimization strategies.
 class _MinimizeCrossingsButton extends StatelessWidget {
   final ValueChanged<bool> onMinimize;
 
@@ -597,34 +773,46 @@ class _MinimizeCrossingsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = FlowDrawSkin.of(context);
     return PopupMenuButton<bool>(
-      tooltip: 'Minimize Crossings',
+      tooltip: 'Minimize crossings',
       onSelected: onMinimize,
-      itemBuilder: (_) => const [
+      color: t.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(t.itemRadius),
+        side: BorderSide(color: t.border),
+      ),
+      itemBuilder: (_) => [
         PopupMenuItem(
           value: true,
+          height: 36,
           child: Row(
             children: [
-              Icon(Icons.route, size: 16),
-              SizedBox(width: 8),
-              Text('Reroute & change ports'),
+              Icon(Icons.route, size: 16, color: t.foreground),
+              const SizedBox(width: 10),
+              Text('Reroute & change ports',
+                  style: TextStyle(fontSize: 13, color: t.foreground)),
             ],
           ),
         ),
         PopupMenuItem(
           value: false,
+          height: 36,
           child: Row(
             children: [
-              Icon(Icons.alt_route, size: 16),
-              SizedBox(width: 8),
-              Text('Reroute only'),
+              Icon(Icons.alt_route, size: 16, color: t.foreground),
+              const SizedBox(width: 10),
+              Text('Reroute only',
+                  style: TextStyle(fontSize: 13, color: t.foreground)),
             ],
           ),
         ),
       ],
-      child: const Padding(
-        padding: EdgeInsets.all(6),
-        child: Icon(Icons.device_hub, size: 18, color: Colors.white70),
+      child: Container(
+        width: 32,
+        height: 32,
+        alignment: Alignment.center,
+        child: Icon(Icons.device_hub, size: 18, color: t.foreground),
       ),
     );
   }

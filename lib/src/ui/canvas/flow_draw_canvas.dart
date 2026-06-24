@@ -87,11 +87,12 @@ class FlowDrawCanvas extends StatelessWidget {
                     }
                   }
 
-                  // Resolve the font picture for the selection: whether any
-                  // selected object carries text, the font it currently shows,
-                  // and whether it has been individually customized.
                   final fontInfo =
                       _selectionFontInfo(allSelected, canvasState);
+                  final colorInfo =
+                      _selectionColorInfo(allSelected, canvasState);
+                  final arrowInfo =
+                      _selectionArrowInfo(allSelected, canvasState);
 
                   return FloatingToolbar(
                     selectedIds: allSelected,
@@ -103,9 +104,7 @@ class FlowDrawCanvas extends StatelessWidget {
                             drawingObjectIds:
                                 selectionState.selectedDrawingObjectIds,
                           ));
-                      context
-                          .read<SelectionBloc>()
-                          .add(SelectionCleared());
+                      context.read<SelectionBloc>().add(SelectionCleared());
                     },
                     onDuplicate: () {
                       context.read<CanvasBloc>().add(SelectionDuplicated(
@@ -113,14 +112,14 @@ class FlowDrawCanvas extends StatelessWidget {
                           ));
                     },
                     onBringToFront: () {
-                      context.read<CanvasBloc>().add(
-                            ObjectsBroughtToFront(allSelected),
-                          );
+                      context
+                          .read<CanvasBloc>()
+                          .add(ObjectsBroughtToFront(allSelected));
                     },
                     onSendToBack: () {
-                      context.read<CanvasBloc>().add(
-                            ObjectsSentToBack(allSelected),
-                          );
+                      context
+                          .read<CanvasBloc>()
+                          .add(ObjectsSentToBack(allSelected));
                     },
                     onMinimizeCrossings: (changeConnectionPoints) {
                       context.read<CanvasBloc>().add(
@@ -136,6 +135,7 @@ class FlowDrawCanvas extends StatelessWidget {
                             .read<CanvasBloc>()
                             .add(CanvasZoomed(objCreationZoom!))
                         : null,
+                    // Font
                     hasFontTarget: fontInfo.hasFontTarget,
                     currentFontFamily: fontInfo.family,
                     currentFontSize: fontInfo.size,
@@ -155,6 +155,39 @@ class FlowDrawCanvas extends StatelessWidget {
                         ? () => context
                             .read<CanvasBloc>()
                             .add(ObjectFontReset(allSelected))
+                        : null,
+                    // Colour
+                    hasColorTarget: colorInfo.ids.isNotEmpty,
+                    currentFill: colorInfo.fill,
+                    onFillChanged: colorInfo.ids.isNotEmpty
+                        ? (color, clear) {
+                            context.read<CanvasBloc>().add(ObjectColorsChanged(
+                                  colorInfo.ids,
+                                  fillColor: color,
+                                  clearFill: clear,
+                                ));
+                          }
+                        : null,
+                    onStrokeChanged: colorInfo.ids.isNotEmpty
+                        ? (color) {
+                            context.read<CanvasBloc>().add(ObjectColorsChanged(
+                                  colorInfo.ids,
+                                  strokeColor: color,
+                                ));
+                          }
+                        : null,
+                    // Arrow direction
+                    hasArrowTarget: arrowInfo.ids.isNotEmpty,
+                    arrowDirected: arrowInfo.anyDirected,
+                    onToggleArrowDirection: arrowInfo.ids.isNotEmpty
+                        ? () => context.read<CanvasBloc>().add(
+                              ObjectsArrowHeadChanged(
+                                arrowInfo.ids,
+                                arrowInfo.anyDirected
+                                    ? ArrowHeadType.none
+                                    : ArrowHeadType.triangle,
+                              ),
+                            )
                         : null,
                   );
                 },
@@ -206,35 +239,73 @@ class FlowDrawCanvas extends StatelessWidget {
         if (r.top < minY) minY = r.top;
         if (r.right > maxX) maxX = r.right;
       }
-      // For nodes, use the offset (position) — size isn't easily available
-      // here since it comes from the rendered widget.
       final node = canvasState.nodes[id];
       if (node != null) {
         final pos = node.offset;
         if (pos.dx < minX) minX = pos.dx;
         if (pos.dy < minY) minY = pos.dy;
-        if (pos.dx + 200 > maxX) maxX = pos.dx + 200; // estimated width
+        if (pos.dx + 200 > maxX) maxX = pos.dx + 200;
       }
     }
 
     if (minX.isInfinite) return null;
 
-    // Transform world coords to screen coords via viewport offset + zoom.
     final centerX = (minX + maxX) / 2;
     final zoom = canvasState.viewportZoom;
     final vp = canvasState.viewportOffset;
     final screenX = (centerX - vp.dx) * zoom;
     final screenY = (minY - vp.dy) * zoom - 10;
 
-    return Offset(screenX - 100, screenY); // offset left to roughly center
+    return Offset(screenX - 100, screenY);
+  }
+
+  // --- Colour summary -----------------------------------------------------
+
+  static bool _isColorable(DrawingObject? o) =>
+      o is RectangleObject ||
+      o is CircleObject ||
+      o is DiamondObject ||
+      o is ParallelogramObject ||
+      o is ForkJoinObject ||
+      o is ArrowObject ||
+      o is LineObject;
+
+  static Color? _fillOf(DrawingObject? o) => switch (o) {
+        RectangleObject() => o.fillColor,
+        CircleObject() => o.fillColor,
+        DiamondObject() => o.fillColor,
+        ParallelogramObject() => o.fillColor,
+        ForkJoinObject() => o.fillColor,
+        _ => null,
+      };
+
+  static ({Set<String> ids, Color? fill}) _selectionColorInfo(
+      Set<String> selectedIds, CanvasState state) {
+    final ids = selectedIds
+        .where((id) => _isColorable(state.drawingObjects[id]))
+        .toSet();
+    Color? fill;
+    for (final id in ids) {
+      final f = _fillOf(state.drawingObjects[id]);
+      if (f != null) fill = f;
+    }
+    return (ids: ids, fill: fill);
+  }
+
+  // --- Arrow summary ------------------------------------------------------
+
+  static ({Set<String> ids, bool anyDirected}) _selectionArrowInfo(
+      Set<String> selectedIds, CanvasState state) {
+    final ids = selectedIds
+        .where((id) => state.drawingObjects[id] is ArrowObject)
+        .toSet();
+    final anyDirected = ids.any((id) =>
+        (state.drawingObjects[id] as ArrowObject).arrowHead !=
+        ArrowHeadType.none);
+    return (ids: ids, anyDirected: anyDirected);
   }
 
   /// Summarizes the font state of the selection for the floating toolbar.
-  ///
-  /// [hasFontTarget] is true when at least one selected object carries text.
-  /// [family]/[size] are the effective font shown for the first such object
-  /// (resolving the global default for non-customized shapes). [customized] is
-  /// true when any selected object has been individually customized.
   static ({bool hasFontTarget, String family, double size, bool customized})
       _selectionFontInfo(Set<String> selectedIds, CanvasState canvasState) {
     bool hasFontTarget = false;

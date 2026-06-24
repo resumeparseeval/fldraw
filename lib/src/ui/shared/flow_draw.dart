@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:nodeline/nodeline.dart';
 import 'package:nodeline/src/core/controller/flow_draw_controller.dart';
+import 'package:nodeline/src/ui/shared/skin.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
@@ -20,7 +21,8 @@ class FlowDraw extends StatefulWidget {
     this.controller,
     this.onCanvasStateChanged,
     this.onSelectionStateChanged,
-    this.onToolStateChanged, this.onControllerCreated,
+    this.onToolStateChanged,
+    this.onControllerCreated,
   });
 
   @override
@@ -98,9 +100,17 @@ class _FlowDrawState extends State<FlowDraw> {
         BlocProvider.value(value: _toolBloc),
       ],
       child: ShadcnApp(
-        theme: ThemeData(colorScheme: ColorSchemes.darkZinc, radius: 0.7),
+        // Crisper corners than the old 0.7 — a cleaner, more architectural
+        // monotone read while staying comfortably soft.
+        theme: ThemeData(colorScheme: ColorSchemes.darkZinc, radius: 0.55),
         home: material.Scaffold(
-          body: DrawerOverlay(child: widget.child),
+          // The whole app reads its chrome colours from one place.
+          body: DrawerOverlay(
+            child: FlowDrawSkin(
+              tokens: FlowDrawTokens.dark,
+              child: widget.child,
+            ),
+          ),
         ),
       ),
     );

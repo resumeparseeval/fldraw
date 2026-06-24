@@ -10,6 +10,7 @@ export 'package:nodeline/src/ui/canvas/flow_draw_canvas.dart';
 export 'package:nodeline/src/ui/canvas/canvas_chat_panel.dart';
 export 'package:nodeline/src/ui/canvas/paint_profiler.dart' show PaintProfiler;
 export 'package:nodeline/src/ui/nodes/builders.dart';
+export 'package:nodeline/src/ui/shared/skin.dart';
 export 'package:nodeline/src/ui/shared/toolbar.dart';
 export 'package:nodeline/src/ui/shared/history_panel.dart';
 export 'package:nodeline/src/ui/shared/flow_draw.dart';
