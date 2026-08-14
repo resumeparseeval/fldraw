@@ -215,7 +215,9 @@ class TextRun extends Equatable {
   }) {
     return TextRun(
       text ?? this.text,
-      fontFamily: fontFamily == _sentinel ? this.fontFamily : fontFamily as String?,
+      fontFamily: fontFamily == _sentinel
+          ? this.fontFamily
+          : fontFamily as String?,
       fontSize: fontSize == _sentinel ? this.fontSize : fontSize as double?,
       bold: bold == _sentinel ? this.bold : bold as bool?,
       italic: italic == _sentinel ? this.italic : italic as bool?,
@@ -224,22 +226,22 @@ class TextRun extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        if (fontFamily != null) 'fontFamily': fontFamily,
-        if (fontSize != null) 'fontSize': fontSize,
-        if (bold != null) 'bold': bold,
-        if (italic != null) 'italic': italic,
-        if (color != null) 'color': color,
-      };
+    'text': text,
+    if (fontFamily != null) 'fontFamily': fontFamily,
+    if (fontSize != null) 'fontSize': fontSize,
+    if (bold != null) 'bold': bold,
+    if (italic != null) 'italic': italic,
+    if (color != null) 'color': color,
+  };
 
   factory TextRun.fromJson(Map<String, dynamic> json) => TextRun(
-        json['text'] as String? ?? '',
-        fontFamily: json['fontFamily'] as String?,
-        fontSize: _sanitizeFontSize(json['fontSize'] as num?),
-        bold: json['bold'] as bool?,
-        italic: json['italic'] as bool?,
-        color: json['color'] as int?,
-      );
+    json['text'] as String? ?? '',
+    fontFamily: json['fontFamily'] as String?,
+    fontSize: _sanitizeFontSize(json['fontSize'] as num?),
+    bold: json['bold'] as bool?,
+    italic: json['italic'] as bool?,
+    color: json['color'] as int?,
+  );
 
   @override
   List<Object?> get props => [text, fontFamily, fontSize, bold, italic, color];
@@ -407,7 +409,12 @@ abstract class DrawingObject {
   final double angle;
   final double creationZoom;
 
-  DrawingObject({required this.id, this.isSelected = false, this.angle = 0.0, this.creationZoom = 1.0});
+  DrawingObject({
+    required this.id,
+    this.isSelected = false,
+    this.angle = 0.0,
+    this.creationZoom = 1.0,
+  });
 
   Rect get rect;
 
@@ -449,8 +456,22 @@ class RectangleObject extends DrawingObject {
   /// Custom stroke/border color. When null, the default stroke is used.
   final Color? strokeColor;
 
-  RectangleObject({required super.id, required Rect rect, super.isSelected, super.angle, super.creationZoom, this.text, this.textStyle, this.richText, this.fontCustomized = false, this.isEditing = false, this.lineStyle = LineStyle.solid, this.borderRadius = 0.0, this.fillColor, this.strokeColor})
-    : _rect = rect;
+  RectangleObject({
+    required super.id,
+    required Rect rect,
+    super.isSelected,
+    super.angle,
+    super.creationZoom,
+    this.text,
+    this.textStyle,
+    this.richText,
+    this.fontCustomized = false,
+    this.isEditing = false,
+    this.lineStyle = LineStyle.solid,
+    this.borderRadius = 0.0,
+    this.fillColor,
+    this.strokeColor,
+  }) : _rect = rect;
 
   @override
   Rect get rect => _rect;
@@ -466,11 +487,12 @@ class RectangleObject extends DrawingObject {
     'angle': angle,
     'creationZoom': creationZoom,
     if (text != null) 'text': text,
-    if (textStyle != null) 'textStyle': {
-      'fontFamily': textStyle!.fontFamily,
-      'fontSize': textStyle!.fontSize,
-      'color': textStyle!.color?.value,
-    },
+    if (textStyle != null)
+      'textStyle': {
+        'fontFamily': textStyle!.fontFamily,
+        'fontSize': textStyle!.fontSize,
+        'color': textStyle!.color?.value,
+      },
     if (richText != null) 'richText': richTextToJson(richText),
     if (fontCustomized) 'fontCustomized': true,
     'lineStyle': lineStyle.name,
@@ -491,15 +513,36 @@ class RectangleObject extends DrawingObject {
       textStyle: style,
       richText: richTextFromJson(json['richText']),
       fontCustomized: json['fontCustomized'] as bool? ?? false,
-      lineStyle: json['lineStyle'] != null ? LineStyle.values.byName(json['lineStyle']) : LineStyle.solid,
+      lineStyle: json['lineStyle'] != null
+          ? LineStyle.values.byName(json['lineStyle'])
+          : LineStyle.solid,
       borderRadius: (json['borderRadius'] as num?)?.toDouble() ?? 0.0,
-      fillColor: json['fillColor'] != null ? Color(json['fillColor'] as int) : null,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      fillColor: json['fillColor'] != null
+          ? Color(json['fillColor'] as int)
+          : null,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
   @override
-  DrawingObject copyWith({Rect? rect, bool? isSelected, double? angle, double? creationZoom, LineStyle? lineStyle, bool? isEditing, double? borderRadius, Color? fillColor, Color? strokeColor, TextStyle? textStyle, List<TextRun>? richText, bool? fontCustomized, bool clearFill = false, bool clearStroke = false}) {
+  DrawingObject copyWith({
+    Rect? rect,
+    bool? isSelected,
+    double? angle,
+    double? creationZoom,
+    LineStyle? lineStyle,
+    bool? isEditing,
+    double? borderRadius,
+    Color? fillColor,
+    Color? strokeColor,
+    TextStyle? textStyle,
+    List<TextRun>? richText,
+    bool? fontCustomized,
+    bool clearFill = false,
+    bool clearStroke = false,
+  }) {
     return RectangleObject(
       id: id,
       rect: rect ?? _rect,
@@ -530,8 +573,21 @@ class CircleObject extends DrawingObject {
   final Color? fillColor;
   final Color? strokeColor;
 
-  CircleObject({required super.id, required Rect rect, super.isSelected, super.angle, super.creationZoom, this.text, this.textStyle, this.richText, this.fontCustomized = false, this.isEditing = false, this.lineStyle = LineStyle.solid, this.fillColor, this.strokeColor})
-    : _rect = rect;
+  CircleObject({
+    required super.id,
+    required Rect rect,
+    super.isSelected,
+    super.angle,
+    super.creationZoom,
+    this.text,
+    this.textStyle,
+    this.richText,
+    this.fontCustomized = false,
+    this.isEditing = false,
+    this.lineStyle = LineStyle.solid,
+    this.fillColor,
+    this.strokeColor,
+  }) : _rect = rect;
 
   @override
   Rect get rect => _rect;
@@ -547,11 +603,12 @@ class CircleObject extends DrawingObject {
     'angle': angle,
     'creationZoom': creationZoom,
     if (text != null) 'text': text,
-    if (textStyle != null) 'textStyle': {
-      'fontFamily': textStyle!.fontFamily,
-      'fontSize': textStyle!.fontSize,
-      'color': textStyle!.color?.value,
-    },
+    if (textStyle != null)
+      'textStyle': {
+        'fontFamily': textStyle!.fontFamily,
+        'fontSize': textStyle!.fontSize,
+        'color': textStyle!.color?.value,
+      },
     if (richText != null) 'richText': richTextToJson(richText),
     if (fontCustomized) 'fontCustomized': true,
     'lineStyle': lineStyle.name,
@@ -571,14 +628,34 @@ class CircleObject extends DrawingObject {
       textStyle: style,
       richText: richTextFromJson(json['richText']),
       fontCustomized: json['fontCustomized'] as bool? ?? false,
-      lineStyle: json['lineStyle'] != null ? LineStyle.values.byName(json['lineStyle']) : LineStyle.solid,
-      fillColor: json['fillColor'] != null ? Color(json['fillColor'] as int) : null,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      lineStyle: json['lineStyle'] != null
+          ? LineStyle.values.byName(json['lineStyle'])
+          : LineStyle.solid,
+      fillColor: json['fillColor'] != null
+          ? Color(json['fillColor'] as int)
+          : null,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
   @override
-  DrawingObject copyWith({Rect? rect, bool? isSelected, double? angle, double? creationZoom, LineStyle? lineStyle, bool? isEditing, Color? fillColor, Color? strokeColor, TextStyle? textStyle, List<TextRun>? richText, bool? fontCustomized, bool clearFill = false, bool clearStroke = false}) {
+  DrawingObject copyWith({
+    Rect? rect,
+    bool? isSelected,
+    double? angle,
+    double? creationZoom,
+    LineStyle? lineStyle,
+    bool? isEditing,
+    Color? fillColor,
+    Color? strokeColor,
+    TextStyle? textStyle,
+    List<TextRun>? richText,
+    bool? fontCustomized,
+    bool clearFill = false,
+    bool clearStroke = false,
+  }) {
     return CircleObject(
       id: id,
       rect: rect ?? _rect,
@@ -638,11 +715,12 @@ class DiamondObject extends DrawingObject {
     'angle': angle,
     'creationZoom': creationZoom,
     if (text != null) 'text': text,
-    if (textStyle != null) 'textStyle': {
-      'fontFamily': textStyle!.fontFamily,
-      'fontSize': textStyle!.fontSize,
-      'color': textStyle!.color?.value,
-    },
+    if (textStyle != null)
+      'textStyle': {
+        'fontFamily': textStyle!.fontFamily,
+        'fontSize': textStyle!.fontSize,
+        'color': textStyle!.color?.value,
+      },
     if (richText != null) 'richText': richTextToJson(richText),
     if (fontCustomized) 'fontCustomized': true,
     'lineStyle': lineStyle.name,
@@ -665,8 +743,12 @@ class DiamondObject extends DrawingObject {
       lineStyle: json['lineStyle'] != null
           ? LineStyle.values.byName(json['lineStyle'])
           : LineStyle.solid,
-      fillColor: json['fillColor'] != null ? Color(json['fillColor'] as int) : null,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      fillColor: json['fillColor'] != null
+          ? Color(json['fillColor'] as int)
+          : null,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
@@ -760,11 +842,12 @@ class ParallelogramObject extends DrawingObject {
     'angle': angle,
     'creationZoom': creationZoom,
     if (text != null) 'text': text,
-    if (textStyle != null) 'textStyle': {
-      'fontFamily': textStyle!.fontFamily,
-      'fontSize': textStyle!.fontSize,
-      'color': textStyle!.color?.value,
-    },
+    if (textStyle != null)
+      'textStyle': {
+        'fontFamily': textStyle!.fontFamily,
+        'fontSize': textStyle!.fontSize,
+        'color': textStyle!.color?.value,
+      },
     if (richText != null) 'richText': richTextToJson(richText),
     if (fontCustomized) 'fontCustomized': true,
     'lineStyle': lineStyle.name,
@@ -789,8 +872,12 @@ class ParallelogramObject extends DrawingObject {
           ? LineStyle.values.byName(json['lineStyle'])
           : LineStyle.solid,
       skewOffset: (json['skewOffset'] as num?)?.toDouble() ?? 20.0,
-      fillColor: json['fillColor'] != null ? Color(json['fillColor'] as int) : null,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      fillColor: json['fillColor'] != null
+          ? Color(json['fillColor'] as int)
+          : null,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
@@ -885,8 +972,12 @@ class ForkJoinObject extends DrawingObject {
       lineStyle: json['lineStyle'] != null
           ? LineStyle.values.byName(json['lineStyle'])
           : LineStyle.solid,
-      fillColor: json['fillColor'] != null ? Color(json['fillColor'] as int) : null,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      fillColor: json['fillColor'] != null
+          ? Color(json['fillColor'] as int)
+          : null,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
@@ -924,17 +1015,27 @@ class ArrowObject extends DrawingObject {
   final ObjectAttachment? endAttachment;
   List<Offset>? waypoints;
   final LineStyle lineStyle;
+
   /// Optional stroke (line + arrowhead) color. Null = the default object color.
   final Color? strokeColor;
+
   /// The arrowhead at the end. [ArrowHeadType.none] makes the edge undirected
   /// (a plain line); [triangle] (default) is a directed arrow.
   final ArrowHeadType arrowHead;
+
   /// Optional text label displayed at the midpoint of this arrow.
   final String? arrowLabel;
+
   /// Optional simplified freehand stroke (world coords) that softly biases the
   /// orthogonal router toward this shape. Null = route freely. Only consulted
   /// for [LinkPathType.orthogonal].
   final List<Offset>? routeGuide;
+
+  /// When true, automatic port passes (auto-layout re-porting, crossing
+  /// minimization, node-drag re-porting, and the paint-time crowded-port
+  /// spread) leave this arrow's attachment ports exactly where they are.
+  /// Set it for hand-routed edges whose ports the user placed deliberately.
+  final bool portsPinned;
 
   /// Transient cache of the polyline actually drawn on screen (edge-snapped
   /// start/end plus routed waypoints), written by the render object each paint.
@@ -959,6 +1060,7 @@ class ArrowObject extends DrawingObject {
     this.arrowHead = ArrowHeadType.triangle,
     this.arrowLabel,
     this.routeGuide,
+    this.portsPinned = false,
   });
 
   @override
@@ -1023,7 +1125,6 @@ class ArrowObject extends DrawingObject {
     return Offset(x, y);
   }
 
-
   @override
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -1043,6 +1144,7 @@ class ArrowObject extends DrawingObject {
     if (arrowLabel != null) 'arrowLabel': arrowLabel,
     if (routeGuide != null)
       'routeGuide': routeGuide!.map((o) => o.toJson()).toList(),
+    if (portsPinned) 'portsPinned': true,
   };
 
   factory ArrowObject.fromJson(Map<String, dynamic> json) {
@@ -1052,22 +1154,33 @@ class ArrowObject extends DrawingObject {
       end: JSONOffset.fromJson((json['end'] as List).cast<double>()),
       isSelected: json['isSelected'] ?? false,
       pathType: LinkPathType.values.byName(json['pathType'] ?? 'straight'),
-      startAttachment: json['startAttachment'] != null ? ObjectAttachment.fromJson(json['startAttachment']) : null,
-      endAttachment: json['endAttachment'] != null ? ObjectAttachment.fromJson(json['endAttachment']) : null,
+      startAttachment: json['startAttachment'] != null
+          ? ObjectAttachment.fromJson(json['startAttachment'])
+          : null,
+      endAttachment: json['endAttachment'] != null
+          ? ObjectAttachment.fromJson(json['endAttachment'])
+          : null,
       angle: json['angle'] ?? 0.0,
       creationZoom: (json['creationZoom'] as num?)?.toDouble() ?? 1.0,
-      midPoint: json['midPoint'] != null ? JSONOffset.fromJson((json['midPoint'] as List).cast<double>()) : null,
-      lineStyle: json['lineStyle'] != null ? LineStyle.values.byName(json['lineStyle']) : LineStyle.solid,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      midPoint: json['midPoint'] != null
+          ? JSONOffset.fromJson((json['midPoint'] as List).cast<double>())
+          : null,
+      lineStyle: json['lineStyle'] != null
+          ? LineStyle.values.byName(json['lineStyle'])
+          : LineStyle.solid,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
       arrowHead: json['arrowHead'] != null
           ? ArrowHeadType.values.byName(json['arrowHead'])
           : ArrowHeadType.triangle,
       arrowLabel: json['arrowLabel'] as String?,
       routeGuide: json['routeGuide'] != null
           ? (json['routeGuide'] as List)
-              .map((o) => JSONOffset.fromJson((o as List).cast<double>()))
-              .toList()
+                .map((o) => JSONOffset.fromJson((o as List).cast<double>()))
+                .toList()
           : null,
+      portsPinned: json['portsPinned'] as bool? ?? false,
     );
   }
 
@@ -1093,6 +1206,7 @@ class ArrowObject extends DrawingObject {
     bool clearArrowLabel = false,
     List<Offset>? routeGuide,
     bool clearRouteGuide = false,
+    bool? portsPinned,
   }) {
     return ArrowObject(
       id: id,
@@ -1101,10 +1215,12 @@ class ArrowObject extends DrawingObject {
       isSelected: isSelected ?? this.isSelected,
       midPoint: midPoint ?? this.midPoint,
       pathType: pathType ?? this.pathType,
-      startAttachment:
-          clearStartAttachment ? null : (startAttachment ?? this.startAttachment),
-      endAttachment:
-          clearEndAttachment ? null : (endAttachment ?? this.endAttachment),
+      startAttachment: clearStartAttachment
+          ? null
+          : (startAttachment ?? this.startAttachment),
+      endAttachment: clearEndAttachment
+          ? null
+          : (endAttachment ?? this.endAttachment),
       angle: angle ?? this.angle,
       creationZoom: creationZoom ?? this.creationZoom,
       waypoints: waypoints ?? this.waypoints,
@@ -1113,6 +1229,7 @@ class ArrowObject extends DrawingObject {
       arrowHead: arrowHead ?? this.arrowHead,
       arrowLabel: clearArrowLabel ? null : (arrowLabel ?? this.arrowLabel),
       routeGuide: clearRouteGuide ? null : (routeGuide ?? this.routeGuide),
+      portsPinned: portsPinned ?? this.portsPinned,
     );
   }
 }
@@ -1124,6 +1241,7 @@ class LineObject extends DrawingObject {
   final ObjectAttachment? startAttachment;
   final ObjectAttachment? endAttachment;
   final LineStyle lineStyle;
+
   /// Optional stroke color. Null = the default object color.
   final Color? strokeColor;
 
@@ -1214,9 +1332,15 @@ class LineObject extends DrawingObject {
           : null,
       angle: json['angle'] ?? 0.0,
       creationZoom: (json['creationZoom'] as num?)?.toDouble() ?? 1.0,
-      midPoint: json['midPoint'] != null ? JSONOffset.fromJson((json['midPoint'] as List).cast<double>()) : null,
-      lineStyle: json['lineStyle'] != null ? LineStyle.values.byName(json['lineStyle']) : LineStyle.solid,
-      strokeColor: json['strokeColor'] != null ? Color(json['strokeColor'] as int) : null,
+      midPoint: json['midPoint'] != null
+          ? JSONOffset.fromJson((json['midPoint'] as List).cast<double>())
+          : null,
+      lineStyle: json['lineStyle'] != null
+          ? LineStyle.values.byName(json['lineStyle'])
+          : LineStyle.solid,
+      strokeColor: json['strokeColor'] != null
+          ? Color(json['strokeColor'] as int)
+          : null,
     );
   }
 
@@ -1242,10 +1366,12 @@ class LineObject extends DrawingObject {
       end: end ?? this.end,
       midPoint: midPoint ?? this.midPoint,
       isSelected: isSelected ?? this.isSelected,
-      startAttachment:
-          clearStartAttachment ? null : (startAttachment ?? this.startAttachment),
-      endAttachment:
-          clearEndAttachment ? null : (endAttachment ?? this.endAttachment),
+      startAttachment: clearStartAttachment
+          ? null
+          : (startAttachment ?? this.startAttachment),
+      endAttachment: clearEndAttachment
+          ? null
+          : (endAttachment ?? this.endAttachment),
       angle: angle ?? this.angle,
       creationZoom: creationZoom ?? this.creationZoom,
       lineStyle: lineStyle ?? this.lineStyle,
@@ -1322,7 +1448,12 @@ class PencilStrokeObject extends DrawingObject {
   }
 
   @override
-  DrawingObject copyWith({List<PointVector>? points, bool? isSelected, double? angle, double? creationZoom}) {
+  DrawingObject copyWith({
+    List<PointVector>? points,
+    bool? isSelected,
+    double? angle,
+    double? creationZoom,
+  }) {
     return PencilStrokeObject(
       id: id,
       points: points ?? this.points,
@@ -1440,9 +1571,9 @@ class TextObject extends DrawingObject {
     super.isSelected,
     super.angle,
     super.creationZoom,
-  })  : _rect = rect,
-        _text = text,
-        _style = style;
+  }) : _rect = rect,
+       _text = text,
+       _style = style;
 
   String get text => _text;
   set text(String value) {
@@ -1511,7 +1642,8 @@ class TextObject extends DrawingObject {
       text: json['text'] ?? 'Text',
       style: TextStyle(
         fontFamily: styleJson?['fontFamily'] as String?,
-        fontSize: _sanitizeFontSize(styleJson?['fontSize'] as num?) ??
+        fontSize:
+            _sanitizeFontSize(styleJson?['fontSize'] as num?) ??
             kEditorDefaultFontSize,
         color: styleJson?['color'] != null
             ? Color(styleJson!['color'] as int)
@@ -1579,7 +1711,12 @@ class SvgObject extends DrawingObject {
   };
 
   @override
-  DrawingObject copyWith({Rect? rect, bool? isSelected, double? angle, double? creationZoom}) {
+  DrawingObject copyWith({
+    Rect? rect,
+    bool? isSelected,
+    double? angle,
+    double? creationZoom,
+  }) {
     return SvgObject(
       id: id,
       rect: rect ?? _rect,
@@ -1663,7 +1800,10 @@ class ObjectAttachment extends Equatable {
   // An offset where (0,0) is topLeft and (1,1) is bottomRight of the target object's rect.
   final Offset relativePosition;
 
-  const ObjectAttachment({required this.objectId, required this.relativePosition});
+  const ObjectAttachment({
+    required this.objectId,
+    required this.relativePosition,
+  });
 
   @override
   List<Object> get props => [objectId, relativePosition];
@@ -1676,7 +1816,10 @@ class ObjectAttachment extends Equatable {
   factory ObjectAttachment.fromJson(Map<String, dynamic> json) {
     return ObjectAttachment(
       objectId: json['objectId'],
-      relativePosition: Offset(json['relativePosition'][0], json['relativePosition'][1]),
+      relativePosition: Offset(
+        json['relativePosition'][0],
+        json['relativePosition'][1],
+      ),
     );
   }
 
@@ -1745,10 +1888,7 @@ class EntityComment extends Equatable {
     this.renderedPath,
   });
 
-  EntityComment copyWith({
-    String? text,
-    bool? resolved,
-  }) {
+  EntityComment copyWith({String? text, bool? resolved}) {
     return EntityComment(
       id: id,
       targetId: targetId,
@@ -1797,7 +1937,9 @@ class EntityComment extends Equatable {
       sourceObjectId: json['sourceObjectId'] as String?,
       targetObjectId: json['targetObjectId'] as String?,
       renderedPath: (json['renderedPath'] as List?)
-          ?.map((p) => Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()))
+          ?.map(
+            (p) => Offset((p[0] as num).toDouble(), (p[1] as num).toDouble()),
+          )
           .toList(),
     );
   }

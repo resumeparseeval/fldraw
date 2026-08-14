@@ -34,14 +34,14 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   /// shape" — also computed in the data layer (needs rendered geometry).
   final StreamController<void> _layoutAlongGuideRequests =
       StreamController<void>.broadcast();
-  Stream<void> get layoutAlongGuideRequests =>
-      _layoutAlongGuideRequests.stream;
+  Stream<void> get layoutAlongGuideRequests => _layoutAlongGuideRequests.stream;
 
   /// "Swap" request — exchange two selected nodes' positions or two selected
   /// edges' endpoints. Computed in the data layer (needs rendered geometry).
   final StreamController<void> _swapRequests =
       StreamController<void>.broadcast();
   Stream<void> get swapRequests => _swapRequests.stream;
+
   /// Snapshot of the state before an ongoing non-undoable operation
   /// (drag, resize, rotation). Captured on the first non-undoable event
   /// and consumed by the corresponding "ended" event.
@@ -111,7 +111,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
         ObjectFontChanged e => _onObjectFontChanged(e, emit),
         ObjectFontReset e => _onObjectFontReset(e, emit),
         NodesFittedToContent e => _onNodesFittedToContent(e, emit),
-        ObjectDuplicatedWithConnection e => _onObjectDuplicatedWithConnection(e, emit),
+        ObjectDuplicatedWithConnection e => _onObjectDuplicatedWithConnection(
+          e,
+          emit,
+        ),
         GridToggled e => _onGridToggled(e, emit),
         CrossingsMinimized e => _onCrossingsMinimized(e, emit),
         CommentAdded e => _onCommentAdded(e, emit),
@@ -142,10 +145,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     // becomes one entry on commit. The pre-turn snapshot was captured by
     // [AgentTurnBegan], so just emit the new state and preserve the stacks.
     if (_inAgentTurn) {
-      emit(newState.copyWith(
-        undoStack: state.undoStack,
-        redoStack: state.redoStack,
-      ));
+      emit(
+        newState.copyWith(
+          undoStack: state.undoStack,
+          redoStack: state.redoStack,
+        ),
+      );
       return;
     }
     if (event.isUndoable) {
@@ -203,16 +208,20 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     // Use the pre-operation snapshot if available (captured before the first
     // non-undoable event like drag/resize/rotation updates). This ensures
     // undo restores the state BEFORE the operation, not after.
-    final historicState = _preOperationSnapshot ?? CanvasState.historic(
-      nodes: Map<String, NodeInstance>.from(currentState.nodes),
-      drawingObjects: Map<String, DrawingObject>.from(currentState.drawingObjects),
-      viewportOffset: currentState.viewportOffset,
-      viewportZoom: currentState.viewportZoom,
-      comments: Map<String, EntityComment>.from(currentState.comments),
-      showGrid: currentState.showGrid,
-      defaultFontFamily: currentState.defaultFontFamily,
-      defaultFontSize: currentState.defaultFontSize,
-    );
+    final historicState =
+        _preOperationSnapshot ??
+        CanvasState.historic(
+          nodes: Map<String, NodeInstance>.from(currentState.nodes),
+          drawingObjects: Map<String, DrawingObject>.from(
+            currentState.drawingObjects,
+          ),
+          viewportOffset: currentState.viewportOffset,
+          viewportZoom: currentState.viewportZoom,
+          comments: Map<String, EntityComment>.from(currentState.comments),
+          showGrid: currentState.showGrid,
+          defaultFontFamily: currentState.defaultFontFamily,
+          defaultFontSize: currentState.defaultFontSize,
+        );
     _preOperationSnapshot = null;
 
     final newUndoStack = List<HistoryEntry>.from(currentState.undoStack)
@@ -223,11 +232,13 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     emit(state.copyWith(undoStack: newUndoStack, redoStack: []));
   }
 
-  void _onCanvasTransformed(CanvasTransformed event, Emitter<CanvasState> emit) {
-    emit(state.copyWith(
-      viewportZoom: event.zoom,
-      viewportOffset: event.offset,
-    ));
+  void _onCanvasTransformed(
+    CanvasTransformed event,
+    Emitter<CanvasState> emit,
+  ) {
+    emit(
+      state.copyWith(viewportZoom: event.zoom, viewportOffset: event.offset),
+    );
   }
 
   void _onCanvasPanned(CanvasPanned event, Emitter<CanvasState> emit) {
@@ -276,12 +287,11 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectsRotationEnded(
-      ObjectsRotationEnded event,
-      Emitter<CanvasState> emit,
-      ) {
+    ObjectsRotationEnded event,
+    Emitter<CanvasState> emit,
+  ) {
     _pushToUndoStack(event, emit, state);
   }
-
 
   void _onDrawingObjectUpdated(
     DrawingObjectUpdated event,
@@ -356,8 +366,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     if (obj is! ArrowObject && obj is! LineObject) return;
 
     final dynamic edge = obj;
-    final ObjectAttachment? attachment =
-        event.isStart ? edge.startAttachment : edge.endAttachment;
+    final ObjectAttachment? attachment = event.isStart
+        ? edge.startAttachment
+        : edge.endAttachment;
     // Only attached endpoints slide along an edge.
     if (attachment == null) return;
     final rect = _attachmentRect(attachment.objectId);
@@ -387,8 +398,8 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       objectId: attachment.objectId,
       relativePosition: newRel,
     );
-    final Offset newPoint = rect.topLeft +
-        Offset(rect.width * newRel.dx, rect.height * newRel.dy);
+    final Offset newPoint =
+        rect.topLeft + Offset(rect.width * newRel.dx, rect.height * newRel.dy);
 
     // This is a self-contained, one-shot edit. Discard any stale pre-operation
     // snapshot left behind by an earlier DrawingObjectUpdated (e.g. a text-size
@@ -396,12 +407,18 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     // ONLY this endpoint move, not back past that earlier change.
     _preOperationSnapshot = null;
     _pushToUndoStack(event, emit, state);
-    final DrawingObject updated = event.isStart
+    // Sliding an endpoint is deliberate; pin an arrow's ports so automatic
+    // port passes don't move them back afterwards.
+    DrawingObject updated = event.isStart
         ? edge.copyWith(start: newPoint, startAttachment: newAttachment)
         : edge.copyWith(end: newPoint, endAttachment: newAttachment);
+    if (updated is ArrowObject) {
+      updated = updated.copyWith(portsPinned: true);
+    }
 
-    final newDrawingObjects =
-        Map<String, DrawingObject>.from(state.drawingObjects);
+    final newDrawingObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
     newDrawingObjects[updated.id] = updated;
     emit(state.copyWith(drawingObjects: newDrawingObjects));
   }
@@ -555,11 +572,13 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
             }
           } else if (object is PencilStrokeObject) {
             object.points = object.points
-                .map((p) => PointVector(
-                      p.x + snapDelta.dx,
-                      p.y + snapDelta.dy,
-                      p.pressure,
-                    ))
+                .map(
+                  (p) => PointVector(
+                    p.x + snapDelta.dx,
+                    p.y + snapDelta.dy,
+                    p.pressure,
+                  ),
+                )
                 .toList();
           } else if (object is RectangleObject) {
             object.rect = object.rect.shift(snapDelta);
@@ -609,11 +628,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
           }
         } else if (object is PencilStrokeObject) {
           object.points = object.points
-              .map((p) => PointVector(
-                    p.x + delta.dx,
-                    p.y + delta.dy,
-                    p.pressure,
-                  ))
+              .map(
+                (p) => PointVector(p.x + delta.dx, p.y + delta.dy, p.pressure),
+              )
               .toList();
         } else if (object is RectangleObject) {
           object.rect = object.rect.shift(delta);
@@ -684,14 +701,16 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     final newUndoStack = List<HistoryEntry>.from(state.undoStack)
       ..add((currentStateForUndo, nextEvent));
 
-    emit(nextState.copyWith(
-      undoStack: newUndoStack,
-      redoStack: newRedoStack,
-      showGrid: state.showGrid,
-      comments: state.comments,
-      defaultFontFamily: nextState.defaultFontFamily,
-      defaultFontSize: nextState.defaultFontSize,
-    ));
+    emit(
+      nextState.copyWith(
+        undoStack: newUndoStack,
+        redoStack: newRedoStack,
+        showGrid: state.showGrid,
+        comments: state.comments,
+        defaultFontFamily: nextState.defaultFontFamily,
+        defaultFontSize: nextState.defaultFontSize,
+      ),
+    );
   }
 
   void _onAgentTurnBegan(AgentTurnBegan event, Emitter<CanvasState> emit) {
@@ -702,14 +721,17 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onAgentTurnCommitted(
-      AgentTurnCommitted event, Emitter<CanvasState> emit) {
+    AgentTurnCommitted event,
+    Emitter<CanvasState> emit,
+  ) {
     _inAgentTurn = false;
     final pre = _preOperationSnapshot;
     _preOperationSnapshot = null;
     if (pre == null) return;
 
     // No-op turn (nothing changed) → don't pollute history.
-    final unchanged = mapEquals(pre.drawingObjects, state.drawingObjects) &&
+    final unchanged =
+        mapEquals(pre.drawingObjects, state.drawingObjects) &&
         mapEquals(pre.nodes, state.nodes);
     if (unchanged) return;
 
@@ -735,10 +757,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       newUndoStack.removeAt(0);
     }
 
-    emit(target.copyWith(
-      undoStack: newUndoStack,
-      redoStack: const [],
-    ));
+    emit(target.copyWith(undoStack: newUndoStack, redoStack: const []));
   }
 
   void _onNewProjectCreated(
@@ -749,19 +768,19 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     showNodeEditorSnackbar('New project created.', SnackbarType.success);
   }
 
-  void _onGridToggled(
-    GridToggled event,
-    Emitter<CanvasState> emit,
-  ) {
+  void _onGridToggled(GridToggled event, Emitter<CanvasState> emit) {
     emit(state.copyWith(showGrid: !state.showGrid));
   }
 
   void _onAutoLayoutApplied(
-      AutoLayoutApplied event, Emitter<CanvasState> emit) {
+    AutoLayoutApplied event,
+    Emitter<CanvasState> emit,
+  ) {
     _pushToUndoStack(event, emit, state);
     final newNodes = Map<String, NodeInstance>.from(state.nodes);
-    final newDrawingObjects =
-        Map<String, DrawingObject>.from(state.drawingObjects);
+    final newDrawingObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     event.nodeOffsets.forEach((id, offset) {
       final node = newNodes[id];
@@ -855,7 +874,8 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
           .toList();
       final drawingObjects = {for (var obj in drawingObjectsList) obj.id: obj};
 
-      final commentsList = (event.data['comments'] as List?)
+      final commentsList =
+          (event.data['comments'] as List?)
               ?.map((json) => EntityComment.fromJson(json))
               .toList() ??
           const <EntityComment>[];
@@ -868,9 +888,11 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
           nodes: nodes,
           drawingObjects: drawingObjects,
           comments: comments,
-          defaultFontFamily: event.data['defaultFontFamily'] as String? ??
+          defaultFontFamily:
+              event.data['defaultFontFamily'] as String? ??
               kEditorDefaultFontFamily,
-          defaultFontSize: (event.data['defaultFontSize'] as num?)?.toDouble() ??
+          defaultFontSize:
+              (event.data['defaultFontSize'] as num?)?.toDouble() ??
               kEditorDefaultFontSize,
         ),
       );
@@ -899,8 +921,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     );
     if (pastedObjects != null) {
       _pushToUndoStack(event, emit, state);
-      final newDrawingObjects =
-          Map<String, DrawingObject>.from(state.drawingObjects);
+      final newDrawingObjects = Map<String, DrawingObject>.from(
+        state.drawingObjects,
+      );
       for (final obj in pastedObjects) {
         newDrawingObjects[obj.id] = obj;
       }
@@ -943,7 +966,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
 
     const offset = Offset(16, 16);
     final uuid = const Uuid();
-    final newDrawingObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    final newDrawingObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
     final newSelectedIds = <String>{};
 
     for (final id in event.selectedDrawingObjectIds) {
@@ -1035,7 +1060,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
         newDrawingObjects[newId] = PencilStrokeObject(
           id: newId,
           points: obj.points
-              .map((p) => PointVector(p.x + offset.dx, p.y + offset.dy, p.pressure))
+              .map(
+                (p) =>
+                    PointVector(p.x + offset.dx, p.y + offset.dy, p.pressure),
+              )
               .toList(),
           angle: obj.angle,
         );
@@ -1101,9 +1129,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       }
     }
 
-    emit(state.copyWith(
-      drawingObjects: Map.fromEntries(entries),
-    ));
+    emit(state.copyWith(drawingObjects: Map.fromEntries(entries)));
   }
 
   void _onObjectsSentBackward(
@@ -1125,9 +1151,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       }
     }
 
-    emit(state.copyWith(
-      drawingObjects: Map.fromEntries(entries),
-    ));
+    emit(state.copyWith(drawingObjects: Map.fromEntries(entries)));
   }
 
   void _onObjectsBroughtToFront(
@@ -1138,12 +1162,16 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     _pushToUndoStack(event, emit, state);
 
     final entries = state.drawingObjects.entries.toList();
-    final selected = entries.where((e) => event.selectedIds.contains(e.key)).toList();
-    final rest = entries.where((e) => !event.selectedIds.contains(e.key)).toList();
+    final selected = entries
+        .where((e) => event.selectedIds.contains(e.key))
+        .toList();
+    final rest = entries
+        .where((e) => !event.selectedIds.contains(e.key))
+        .toList();
 
-    emit(state.copyWith(
-      drawingObjects: Map.fromEntries([...rest, ...selected]),
-    ));
+    emit(
+      state.copyWith(drawingObjects: Map.fromEntries([...rest, ...selected])),
+    );
   }
 
   void _onObjectsSentToBack(
@@ -1154,12 +1182,16 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     _pushToUndoStack(event, emit, state);
 
     final entries = state.drawingObjects.entries.toList();
-    final selected = entries.where((e) => event.selectedIds.contains(e.key)).toList();
-    final rest = entries.where((e) => !event.selectedIds.contains(e.key)).toList();
+    final selected = entries
+        .where((e) => event.selectedIds.contains(e.key))
+        .toList();
+    final rest = entries
+        .where((e) => !event.selectedIds.contains(e.key))
+        .toList();
 
-    emit(state.copyWith(
-      drawingObjects: Map.fromEntries([...selected, ...rest]),
-    ));
+    emit(
+      state.copyWith(drawingObjects: Map.fromEntries([...selected, ...rest])),
+    );
   }
 
   void _shiftDrawingObject(DrawingObject object, Offset delta) {
@@ -1177,11 +1209,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       }
     } else if (object is PencilStrokeObject) {
       object.points = object.points
-          .map((p) => PointVector(
-                p.x + delta.dx,
-                p.y + delta.dy,
-                p.pressure,
-              ))
+          .map((p) => PointVector(p.x + delta.dx, p.y + delta.dy, p.pressure))
           .toList();
     } else if (object is RectangleObject) {
       object.rect = object.rect.shift(delta);
@@ -1290,8 +1318,7 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     for (int i = 1; i < entries.length - 1; i++) {
       final (id, rect) = entries[i];
       final targetCenter = firstCenter + step * i;
-      final currentCenter =
-          isHorizontal ? rect.center.dx : rect.center.dy;
+      final currentCenter = isHorizontal ? rect.center.dx : rect.center.dy;
       final delta = isHorizontal
           ? Offset(targetCenter - currentCenter, 0)
           : Offset(0, targetCenter - currentCenter);
@@ -1307,59 +1334,77 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectColorsChanged(
-      ObjectColorsChanged event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    ObjectColorsChanged event,
+    Emitter<CanvasState> emit,
+  ) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     for (final id in event.selectedIds) {
       final obj = updatedObjects[id];
       if (obj == null) continue;
 
       if (obj is RectangleObject) {
-        updatedObjects[id] = obj.copyWith(
-          fillColor: event.fillColor,
-          strokeColor: event.strokeColor,
-          clearFill: event.clearFill,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  fillColor: event.fillColor,
+                  strokeColor: event.strokeColor,
+                  clearFill: event.clearFill,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is CircleObject) {
-        updatedObjects[id] = obj.copyWith(
-          fillColor: event.fillColor,
-          strokeColor: event.strokeColor,
-          clearFill: event.clearFill,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  fillColor: event.fillColor,
+                  strokeColor: event.strokeColor,
+                  clearFill: event.clearFill,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is DiamondObject) {
-        updatedObjects[id] = obj.copyWith(
-          fillColor: event.fillColor,
-          strokeColor: event.strokeColor,
-          clearFill: event.clearFill,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  fillColor: event.fillColor,
+                  strokeColor: event.strokeColor,
+                  clearFill: event.clearFill,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is ParallelogramObject) {
-        updatedObjects[id] = obj.copyWith(
-          fillColor: event.fillColor,
-          strokeColor: event.strokeColor,
-          clearFill: event.clearFill,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  fillColor: event.fillColor,
+                  strokeColor: event.strokeColor,
+                  clearFill: event.clearFill,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is ForkJoinObject) {
-        updatedObjects[id] = obj.copyWith(
-          fillColor: event.fillColor,
-          strokeColor: event.strokeColor,
-          clearFill: event.clearFill,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  fillColor: event.fillColor,
+                  strokeColor: event.strokeColor,
+                  clearFill: event.clearFill,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is ArrowObject) {
         // Edges have only a stroke (line + arrowhead) color, no fill.
-        updatedObjects[id] = obj.copyWith(
-          strokeColor: event.strokeColor,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  strokeColor: event.strokeColor,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       } else if (obj is LineObject) {
-        updatedObjects[id] = obj.copyWith(
-          strokeColor: event.strokeColor,
-          clearStroke: event.clearStroke,
-        ) as DrawingObject;
+        updatedObjects[id] =
+            obj.copyWith(
+                  strokeColor: event.strokeColor,
+                  clearStroke: event.clearStroke,
+                )
+                as DrawingObject;
       }
     }
 
@@ -1371,8 +1416,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectsLineStyleChanged(
-      ObjectsLineStyleChanged event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    ObjectsLineStyleChanged event,
+    Emitter<CanvasState> emit,
+  ) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     for (final id in event.selectedIds) {
       final obj = updatedObjects[id];
@@ -1403,8 +1452,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectsArrowHeadChanged(
-      ObjectsArrowHeadChanged event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    ObjectsArrowHeadChanged event,
+    Emitter<CanvasState> emit,
+  ) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
     for (final id in event.selectedIds) {
       final obj = updatedObjects[id];
       if (obj is ArrowObject) {
@@ -1448,7 +1501,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onGlobalFontChanged(
-      GlobalFontChanged event, Emitter<CanvasState> emit) {
+    GlobalFontChanged event,
+    Emitter<CanvasState> emit,
+  ) {
     // The default lives on the state; shapes read it at paint time, so simply
     // updating the defaults repaints every non-customized shape. Customized
     // shapes keep their own textStyle and are unaffected.
@@ -1463,8 +1518,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectFontChanged(
-      ObjectFontChanged event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    ObjectFontChanged event,
+    Emitter<CanvasState> emit,
+  ) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     for (final id in event.selectedIds) {
       final obj = updatedObjects[id];
@@ -1474,11 +1533,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       // (or only the family) preserves the other axis.
       final current = _shapeTextStyle(obj);
       final newStyle = TextStyle(
-        fontFamily: event.fontFamily ??
-            current?.fontFamily ??
-            state.defaultFontFamily,
-        fontSize:
-            event.fontSize ?? current?.fontSize ?? state.defaultFontSize,
+        fontFamily:
+            event.fontFamily ?? current?.fontFamily ?? state.defaultFontFamily,
+        fontSize: event.fontSize ?? current?.fontSize ?? state.defaultFontSize,
         color: current?.color,
       );
 
@@ -1487,10 +1544,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
         // font control edits it directly.
         updatedObjects[id] = obj.copyWith(style: newStyle);
       } else {
-        final updated = (obj as dynamic).copyWith(
-          textStyle: newStyle,
-          fontCustomized: true,
-        ) as DrawingObject;
+        final updated =
+            (obj as dynamic).copyWith(textStyle: newStyle, fontCustomized: true)
+                as DrawingObject;
         // A whole-node font change supersedes per-character runs — otherwise the
         // runs would override the new uniform font. copyWith can't null richText
         // (it coalesces), so clear it on the fresh copy.
@@ -1506,9 +1562,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     );
   }
 
-  void _onObjectFontReset(
-      ObjectFontReset event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+  void _onObjectFontReset(ObjectFontReset event, Emitter<CanvasState> emit) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     for (final id in event.selectedIds) {
       final obj = updatedObjects[id];
@@ -1521,10 +1578,11 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       // copyWith can't null out textStyle (it coalesces), so assign the field
       // directly on the fresh copy.
       final current = _shapeTextStyle(obj);
-      final reset = (obj as dynamic).copyWith(fontCustomized: false)
-          as DrawingObject;
-      final colorOnly =
-          current?.color != null ? TextStyle(color: current!.color) : null;
+      final reset =
+          (obj as dynamic).copyWith(fontCustomized: false) as DrawingObject;
+      final colorOnly = current?.color != null
+          ? TextStyle(color: current!.color)
+          : null;
       (reset as dynamic).textStyle = colorOnly;
       // Resetting to the global default also drops per-character runs.
       (reset as dynamic).richText = null;
@@ -1592,8 +1650,12 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onNodesFittedToContent(
-      NodesFittedToContent event, Emitter<CanvasState> emit) {
-    final updatedObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    NodesFittedToContent event,
+    Emitter<CanvasState> emit,
+  ) {
+    final updatedObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     // Selection if any, else every text-bearing shape on the canvas.
     final ids = event.selectedIds.isNotEmpty
@@ -1620,8 +1682,8 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
 
       // copyWith (not in-place mutation): the undo snapshot shares these object
       // instances, so we must produce fresh objects to avoid corrupting history.
-      updatedObjects[id] = (obj as dynamic).copyWith(rect: newRect)
-          as DrawingObject;
+      updatedObjects[id] =
+          (obj as dynamic).copyWith(rect: newRect) as DrawingObject;
       changed = true;
     }
 
@@ -1635,12 +1697,18 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   }
 
   void _onObjectDuplicatedWithConnection(
-      ObjectDuplicatedWithConnection event, Emitter<CanvasState> emit) {
+    ObjectDuplicatedWithConnection event,
+    Emitter<CanvasState> emit,
+  ) {
     _pushToUndoStack(event, emit, state);
 
     final sourceObject = state.drawingObjects[event.sourceObjectId];
     if (sourceObject == null ||
-        !(sourceObject is RectangleObject || sourceObject is CircleObject || sourceObject is DiamondObject || sourceObject is ParallelogramObject || sourceObject is ForkJoinObject)) {
+        !(sourceObject is RectangleObject ||
+            sourceObject is CircleObject ||
+            sourceObject is DiamondObject ||
+            sourceObject is ParallelogramObject ||
+            sourceObject is ForkJoinObject)) {
       return;
     }
 
@@ -1662,45 +1730,78 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
 
     switch (event.direction) {
       case QuickActionDirection.top:
-        newRectTopLeft = sourceRect.topLeft - Offset(0, sourceRect.height + spacing);
-        startAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.5, 0.0));
-        endAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.5, 1.0));
+        newRectTopLeft =
+            sourceRect.topLeft - Offset(0, sourceRect.height + spacing);
+        startAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.5, 0.0),
+        );
+        endAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.5, 1.0),
+        );
         break;
       case QuickActionDirection.right:
         newRectTopLeft = sourceRect.topRight + Offset(spacing, 0);
-        startAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(1.0, 0.5));
-        endAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.0, 0.5));
+        startAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(1.0, 0.5),
+        );
+        endAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.0, 0.5),
+        );
         break;
       case QuickActionDirection.bottom:
         newRectTopLeft = sourceRect.bottomLeft + Offset(0, spacing);
-        startAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.5, 1.0));
-        endAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.5, 0.0));
+        startAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.5, 1.0),
+        );
+        endAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.5, 0.0),
+        );
         break;
       case QuickActionDirection.left:
-        newRectTopLeft = sourceRect.topLeft - Offset(sourceRect.width + spacing, 0);
-        startAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(0.0, 0.5));
-        endAttachment = const ObjectAttachment(objectId: '', relativePosition: Offset(1.0, 0.5));
+        newRectTopLeft =
+            sourceRect.topLeft - Offset(sourceRect.width + spacing, 0);
+        startAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(0.0, 0.5),
+        );
+        endAttachment = const ObjectAttachment(
+          objectId: '',
+          relativePosition: Offset(1.0, 0.5),
+        );
         break;
     }
 
     // Avoid overlapping with existing objects: push further if needed
     final existingRects = <Rect>[];
     for (final obj in state.drawingObjects.values) {
-      if (obj is ArrowObject || obj is LineObject || obj is PencilStrokeObject) continue;
+      if (obj is ArrowObject || obj is LineObject || obj is PencilStrokeObject)
+        continue;
       existingRects.add(obj.rect);
     }
     var candidateRect = newRectTopLeft & sourceRect.size;
     const double pushStep = 40.0;
     final Offset pushDir;
     switch (event.direction) {
-      case QuickActionDirection.top:    pushDir = const Offset(0, -1);
-      case QuickActionDirection.right:  pushDir = const Offset(1, 0);
-      case QuickActionDirection.bottom: pushDir = const Offset(0, 1);
-      case QuickActionDirection.left:   pushDir = const Offset(-1, 0);
+      case QuickActionDirection.top:
+        pushDir = const Offset(0, -1);
+      case QuickActionDirection.right:
+        pushDir = const Offset(1, 0);
+      case QuickActionDirection.bottom:
+        pushDir = const Offset(0, 1);
+      case QuickActionDirection.left:
+        pushDir = const Offset(-1, 0);
     }
     // Push until no overlap (max 20 iterations to avoid infinite loop)
     for (int i = 0; i < 20; i++) {
-      final overlaps = existingRects.any((r) => r.overlaps(candidateRect.inflate(10)));
+      final overlaps = existingRects.any(
+        (r) => r.overlaps(candidateRect.inflate(10)),
+      );
       if (!overlaps) break;
       newRectTopLeft += pushDir * pushStep;
       candidateRect = newRectTopLeft & sourceRect.size;
@@ -1711,39 +1812,81 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     final newObjectRect = newRectTopLeft & sourceRect.size;
 
     if (sourceObject is RectangleObject) {
-      newShape = RectangleObject(id: newId, rect: newObjectRect, lineStyle: sourceObject.lineStyle, fillColor: sourceObject.fillColor, strokeColor: sourceObject.strokeColor);
+      newShape = RectangleObject(
+        id: newId,
+        rect: newObjectRect,
+        lineStyle: sourceObject.lineStyle,
+        fillColor: sourceObject.fillColor,
+        strokeColor: sourceObject.strokeColor,
+      );
     } else if (sourceObject is CircleObject) {
-      newShape = CircleObject(id: newId, rect: newObjectRect, lineStyle: sourceObject.lineStyle, fillColor: sourceObject.fillColor, strokeColor: sourceObject.strokeColor);
+      newShape = CircleObject(
+        id: newId,
+        rect: newObjectRect,
+        lineStyle: sourceObject.lineStyle,
+        fillColor: sourceObject.fillColor,
+        strokeColor: sourceObject.strokeColor,
+      );
     } else if (sourceObject is DiamondObject) {
-      newShape = DiamondObject(id: newId, rect: newObjectRect, lineStyle: sourceObject.lineStyle, fillColor: sourceObject.fillColor, strokeColor: sourceObject.strokeColor);
+      newShape = DiamondObject(
+        id: newId,
+        rect: newObjectRect,
+        lineStyle: sourceObject.lineStyle,
+        fillColor: sourceObject.fillColor,
+        strokeColor: sourceObject.strokeColor,
+      );
     } else if (sourceObject is ParallelogramObject) {
-      newShape = ParallelogramObject(id: newId, rect: newObjectRect, lineStyle: sourceObject.lineStyle, fillColor: sourceObject.fillColor, strokeColor: sourceObject.strokeColor);
+      newShape = ParallelogramObject(
+        id: newId,
+        rect: newObjectRect,
+        lineStyle: sourceObject.lineStyle,
+        fillColor: sourceObject.fillColor,
+        strokeColor: sourceObject.strokeColor,
+      );
     } else if (sourceObject is ForkJoinObject) {
-      newShape = ForkJoinObject(id: newId, rect: newObjectRect, lineStyle: sourceObject.lineStyle, fillColor: sourceObject.fillColor, strokeColor: sourceObject.strokeColor);
+      newShape = ForkJoinObject(
+        id: newId,
+        rect: newObjectRect,
+        lineStyle: sourceObject.lineStyle,
+        fillColor: sourceObject.fillColor,
+        strokeColor: sourceObject.strokeColor,
+      );
     } else {
       return;
     }
 
-    final finalStartAttachment = startAttachment.copyWith(objectId: sourceObject.id);
+    final finalStartAttachment = startAttachment.copyWith(
+      objectId: sourceObject.id,
+    );
     final finalEndAttachment = endAttachment.copyWith(objectId: newShape.id);
 
     // Compute actual attachment points on object edges
     final startRelPos = finalStartAttachment.relativePosition;
-    final arrowStart = sourceRect.topLeft +
-        Offset(sourceRect.width * startRelPos.dx, sourceRect.height * startRelPos.dy);
+    final arrowStart =
+        sourceRect.topLeft +
+        Offset(
+          sourceRect.width * startRelPos.dx,
+          sourceRect.height * startRelPos.dy,
+        );
     final endRelPos = finalEndAttachment.relativePosition;
-    final arrowEnd = newObjectRect.topLeft +
-        Offset(newObjectRect.width * endRelPos.dx, newObjectRect.height * endRelPos.dy);
+    final arrowEnd =
+        newObjectRect.topLeft +
+        Offset(
+          newObjectRect.width * endRelPos.dx,
+          newObjectRect.height * endRelPos.dy,
+        );
 
     // Collect obstacles (solid objects only, include connected objects for routing around)
     final obstacles = <Rect>[];
     for (final obj in state.drawingObjects.values) {
-      if (obj is ArrowObject || obj is LineObject || obj is PencilStrokeObject) continue;
+      if (obj is ArrowObject || obj is LineObject || obj is PencilStrokeObject)
+        continue;
       obstacles.add(obj.rect);
     }
     obstacles.add(newObjectRect);
 
-    final dpr = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    final dpr =
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
     final waypoints = OrthogonalRouter.route(
       start: arrowStart,
       end: arrowEnd,
@@ -1764,9 +1907,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       waypoints: waypoints,
     );
 
-    final newDrawingObjects = Map<String, DrawingObject>.from(state.drawingObjects)
-      ..[newShape.id] = newShape
-      ..[newArrow.id] = newArrow;
+    final newDrawingObjects =
+        Map<String, DrawingObject>.from(state.drawingObjects)
+          ..[newShape.id] = newShape
+          ..[newArrow.id] = newArrow;
 
     emit(state.copyWith(drawingObjects: newDrawingObjects));
   }
@@ -1774,7 +1918,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   // ── Crossing Minimization ──────────────────────────────────────────────────
 
   void _onCrossingsMinimized(
-      CrossingsMinimized event, Emitter<CanvasState> emit) {
+    CrossingsMinimized event,
+    Emitter<CanvasState> emit,
+  ) {
     _pushToUndoStack(event, emit, state);
 
     // Collect all ArrowObjects in the selection (or all if selection includes shapes).
@@ -1784,17 +1930,25 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       if (obj is ArrowObject) arrows.add(obj);
     }
 
-    // If no arrows were explicitly selected, fall back to ALL arrows on canvas.
-    final workingArrows = arrows.isNotEmpty
+    // If no arrows were explicitly selected, fall back to ALL arrows on
+    // canvas. Hand-routed arrows keep their ports when ports may change.
+    var workingArrows = arrows.isNotEmpty
         ? arrows
         : state.drawingObjects.values.whereType<ArrowObject>().toList();
+    if (event.changeConnectionPoints) {
+      workingArrows = workingArrows
+          .where((arrow) => !arrow.portsPinned)
+          .toList();
+    }
 
     if (workingArrows.isEmpty) return;
 
     // Build a lookup for all shape rects so we can find connection ports.
     final shapeRects = <String, Rect>{};
     for (final obj in state.drawingObjects.values) {
-      if (obj is! ArrowObject && obj is! LineObject && obj is! PencilStrokeObject) {
+      if (obj is! ArrowObject &&
+          obj is! LineObject &&
+          obj is! PencilStrokeObject) {
         shapeRects[obj.id] = obj.rect;
       }
     }
@@ -1802,7 +1956,9 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
     // Build obstacle list for re-routing.
     final obstacles = shapeRects.values.toList();
 
-    final newDrawingObjects = Map<String, DrawingObject>.from(state.drawingObjects);
+    final newDrawingObjects = Map<String, DrawingObject>.from(
+      state.drawingObjects,
+    );
 
     if (event.changeConnectionPoints) {
       // ── Mode A: reassign connection ports to minimize crossings ─────────
@@ -1838,19 +1994,31 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
           if (j == i) continue;
           final a = bestArrows[j];
           if (a.startAttachment != null) {
-            final key = (a.startAttachment!.objectId, a.startAttachment!.relativePosition);
+            final key = (
+              a.startAttachment!.objectId,
+              a.startAttachment!.relativePosition,
+            );
             portUsage[key] = (portUsage[key] ?? 0) + 1;
           }
           if (a.endAttachment != null) {
-            final key = (a.endAttachment!.objectId, a.endAttachment!.relativePosition);
+            final key = (
+              a.endAttachment!.objectId,
+              a.endAttachment!.relativePosition,
+            );
             portUsage[key] = (portUsage[key] ?? 0) + 1;
           }
         }
 
         int _score(ArrowObject a, int selfIdx) {
           final crossings = _countCrossingsForArrow(a, bestArrows, selfIdx);
-          final startKey = (a.startAttachment!.objectId, a.startAttachment!.relativePosition);
-          final endKey = (a.endAttachment!.objectId, a.endAttachment!.relativePosition);
+          final startKey = (
+            a.startAttachment!.objectId,
+            a.startAttachment!.relativePosition,
+          );
+          final endKey = (
+            a.endAttachment!.objectId,
+            a.endAttachment!.relativePosition,
+          );
           final sharing = (portUsage[startKey] ?? 0) + (portUsage[endKey] ?? 0);
           return crossings * 10 + sharing;
         }
@@ -1893,13 +2061,19 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
                   )
                 : null;
 
-            final candidate = arrow.copyWith(
-              start: startPt,
-              end: endPt,
-              startAttachment: arrow.startAttachment!.copyWith(relativePosition: startRel),
-              endAttachment: arrow.endAttachment!.copyWith(relativePosition: endRel),
-              waypoints: waypoints,
-            ) as ArrowObject;
+            final candidate =
+                arrow.copyWith(
+                      start: startPt,
+                      end: endPt,
+                      startAttachment: arrow.startAttachment!.copyWith(
+                        relativePosition: startRel,
+                      ),
+                      endAttachment: arrow.endAttachment!.copyWith(
+                        relativePosition: endRel,
+                      ),
+                      waypoints: waypoints,
+                    )
+                    as ArrowObject;
 
             bestArrows[i] = candidate;
             final score = _score(candidate, i);
@@ -1932,7 +2106,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
       // connected shapes when the selection contained no shapes directly.
       final selectionHasShapes = event.selectedIds.any((id) {
         final obj = state.drawingObjects[id];
-        return obj != null && obj is! ArrowObject && obj is! LineObject && obj is! PencilStrokeObject;
+        return obj != null &&
+            obj is! ArrowObject &&
+            obj is! LineObject &&
+            obj is! PencilStrokeObject;
       });
       final moveableShapeIds = selectionHasShapes
           ? connectedShapeIds.intersection(event.selectedIds)
@@ -1966,31 +2143,43 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
             for (int b = a + 1; b < allSegs.length; b++) {
               if (allSegs[a].$3 == allSegs[b].$3) continue; // same arrow
               final overlap = _segmentOverlapVector(
-                allSegs[a].$1, allSegs[a].$2,
-                allSegs[b].$1, allSegs[b].$2,
+                allSegs[a].$1,
+                allSegs[a].$2,
+                allSegs[b].$1,
+                allSegs[b].$2,
               );
               if (overlap == Offset.zero) continue;
 
               // Find which moveable shapes are connected to each arrow.
-              final arrowA = workingArrowsCopy.firstWhere((x) => x.id == allSegs[a].$3);
-              final arrowB = workingArrowsCopy.firstWhere((x) => x.id == allSegs[b].$3);
+              final arrowA = workingArrowsCopy.firstWhere(
+                (x) => x.id == allSegs[a].$3,
+              );
+              final arrowB = workingArrowsCopy.firstWhere(
+                (x) => x.id == allSegs[b].$3,
+              );
 
               final shapesA = [
-                if (arrowA.startAttachment != null) arrowA.startAttachment!.objectId,
-                if (arrowA.endAttachment != null) arrowA.endAttachment!.objectId,
+                if (arrowA.startAttachment != null)
+                  arrowA.startAttachment!.objectId,
+                if (arrowA.endAttachment != null)
+                  arrowA.endAttachment!.objectId,
               ].where(moveableShapeIds.contains).toList();
               final shapesB = [
-                if (arrowB.startAttachment != null) arrowB.startAttachment!.objectId,
-                if (arrowB.endAttachment != null) arrowB.endAttachment!.objectId,
+                if (arrowB.startAttachment != null)
+                  arrowB.startAttachment!.objectId,
+                if (arrowB.endAttachment != null)
+                  arrowB.endAttachment!.objectId,
               ].where(moveableShapeIds.contains).toList();
 
               // Push shapes connected to arrowA away along the overlap vector,
               // and shapes connected to arrowB in the opposite direction.
               for (final id in shapesA) {
-                displacements[id] = (displacements[id] ?? Offset.zero) + overlap * nudge;
+                displacements[id] =
+                    (displacements[id] ?? Offset.zero) + overlap * nudge;
               }
               for (final id in shapesB) {
-                displacements[id] = (displacements[id] ?? Offset.zero) - overlap * nudge;
+                displacements[id] =
+                    (displacements[id] ?? Offset.zero) - overlap * nudge;
               }
             }
           }
@@ -2026,13 +2215,22 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
             final eRect = arrow.endAttachment != null
                 ? workingRects[arrow.endAttachment!.objectId]
                 : null;
-            final sRel = arrow.startAttachment?.relativePosition ?? const Offset(0.5, 0.5);
-            final eRel = arrow.endAttachment?.relativePosition ?? const Offset(0.5, 0.5);
+            final sRel =
+                arrow.startAttachment?.relativePosition ??
+                const Offset(0.5, 0.5);
+            final eRel =
+                arrow.endAttachment?.relativePosition ?? const Offset(0.5, 0.5);
             final startPt = sRect != null
-                ? Offset(sRect.left + sRel.dx * sRect.width, sRect.top + sRel.dy * sRect.height)
+                ? Offset(
+                    sRect.left + sRel.dx * sRect.width,
+                    sRect.top + sRel.dy * sRect.height,
+                  )
                 : arrow.start;
             final endPt = eRect != null
-                ? Offset(eRect.left + eRel.dx * eRect.width, eRect.top + eRel.dy * eRect.height)
+                ? Offset(
+                    eRect.left + eRel.dx * eRect.width,
+                    eRect.top + eRel.dy * eRect.height,
+                  )
                 : arrow.end;
             // Collect segments from arrows already rerouted this iteration.
             final existingSegs = <(Offset, Offset)>[];
@@ -2052,7 +2250,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
               endObjectRect: eRect,
               existingSegments: existingSegs,
             );
-            reroutedArrows.add(arrow.copyWith(start: startPt, end: endPt, waypoints: wps) as ArrowObject);
+            reroutedArrows.add(
+              arrow.copyWith(start: startPt, end: endPt, waypoints: wps)
+                  as ArrowObject,
+            );
           }
           workingArrowsCopy = reroutedArrows;
         }
@@ -2115,7 +2316,10 @@ class CanvasBloc extends Bloc<CanvasEvent, CanvasState> {
   /// Each arrow is approximated as a sequence of straight segments via its
   /// waypoints (for orthogonal paths) or a direct segment (for straight paths).
   int _countCrossingsForArrow(
-      ArrowObject arrow, List<ArrowObject> arrows, int selfIndex) {
+    ArrowObject arrow,
+    List<ArrowObject> arrows,
+    int selfIndex,
+  ) {
     int count = 0;
     final segsA = _arrowSegments(arrow);
     for (int j = 0; j < arrows.length; j++) {

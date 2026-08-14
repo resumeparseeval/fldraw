@@ -81,14 +81,17 @@ SelectedEndpoint? nextEndpointOnNode({
   if (attached.length < 2) return null; // nothing to cycle to
 
   double angleOf(Offset relPos) {
-    final p = nodeRect.topLeft +
+    final p =
+        nodeRect.topLeft +
         Offset(nodeRect.width * relPos.dx, nodeRect.height * relPos.dy);
     return (p - center).direction;
   }
+
   attached.sort((a, b) => angleOf(a.relPos).compareTo(angleOf(b.relPos)));
 
   final curIdx = attached.indexWhere(
-      (e) => e.ep.objectId == current.objectId && e.ep.isStart == current.isStart);
+    (e) => e.ep.objectId == current.objectId && e.ep.isStart == current.isStart,
+  );
   if (curIdx < 0) return null;
   final nextIdx =
       (curIdx + (dir >= 0 ? 1 : -1) + attached.length) % attached.length;
@@ -124,7 +127,8 @@ class FlowDrawEditorDataLayer extends StatefulWidget {
   });
 
   @override
-  State<FlowDrawEditorDataLayer> createState() => _FlowDrawEditorDataLayerState();
+  State<FlowDrawEditorDataLayer> createState() =>
+      _FlowDrawEditorDataLayerState();
 }
 
 class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
@@ -183,6 +187,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   SnapPoint? _hoveredSnapPoint;
   SnapPoint? _startSnapPoint;
   List<SnapGuide> _activeSnapGuides = const [];
+
   /// Accumulated cursor travel past an active snap line, per axis. While an
   /// object is held to a guide, the correction we feed back to the drag pins it
   /// in place; this records how far the *cursor* has actually pushed beyond the
@@ -191,6 +196,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// snap band entirely.
   double _snapOvershootX = 0.0;
   double _snapOvershootY = 0.0;
+
   /// A short world-space (start, end) segment for the node-edge center guide
   /// shown while dragging an edge endpoint near a node edge's midpoint.
   (Offset, Offset)? _endpointCenterGuide;
@@ -241,8 +247,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (bbox.width <= 0 || bbox.height <= 0) return;
 
     const margin = 0.85;
-    final zoom = (min(size.width / bbox.width, size.height / bbox.height) * margin)
-        .clamp(1e-4, 2.0);
+    final zoom =
+        (min(size.width / bbox.width, size.height / bbox.height) * margin)
+            .clamp(1e-4, 2.0);
     _canvasBloc.add(CanvasTransformed(zoom: zoom, offset: -bbox.center));
   }
 
@@ -276,8 +283,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _autoLayoutReqSub = _canvasBloc.tidyRequests.listen((_) {
       if (mounted) _applyAutoLayout();
     });
-    _layoutAlongGuideReqSub =
-        _canvasBloc.layoutAlongGuideRequests.listen((_) {
+    _layoutAlongGuideReqSub = _canvasBloc.layoutAlongGuideRequests.listen((_) {
       if (mounted) _layoutSelectionAlongSelectedGuide();
     });
     _swapReqSub = _canvasBloc.swapRequests.listen((_) {
@@ -348,7 +354,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       return developer.ServiceExtensionResponse.result(
         jsonEncode({
           'screen': {'x': x, 'y': y},
-          'world': worldPos == null ? null : {'x': worldPos.dx, 'y': worldPos.dy},
+          'world': worldPos == null
+              ? null
+              : {'x': worldPos.dx, 'y': worldPos.dy},
           'entity': _describeEntity(hitId),
         }),
       );
@@ -356,9 +364,14 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     // ext.fldraw.autoLayout — trigger the layered "Tidy" auto-layout
     // programmatically (same as the Cmd/Ctrl+Shift+L shortcut).
-    developer.registerExtension('ext.fldraw.autoLayout', (method, params) async {
+    developer.registerExtension('ext.fldraw.autoLayout', (
+      method,
+      params,
+    ) async {
       _applyAutoLayout();
-      return developer.ServiceExtensionResponse.result(jsonEncode({'ok': true}));
+      return developer.ServiceExtensionResponse.result(
+        jsonEncode({'ok': true}),
+      );
     });
   }
 
@@ -377,9 +390,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         'pathType': obj.pathType.name,
         'source': obj.startAttachment?.objectId,
         'target': obj.endAttachment?.objectId,
-        'renderedPath': obj.renderedPath
-            ?.map((p) => [p.dx, p.dy])
-            .toList(),
+        'renderedPath': obj.renderedPath?.map((p) => [p.dx, p.dy]).toList(),
       };
     }
     if (obj is LineObject) {
@@ -437,7 +448,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
   @override
   void dispose() {
-    GestureBinding.instance.pointerRouter.removeGlobalRoute(_globalPointerRoute);
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(
+      _globalPointerRoute,
+    );
     _autoLayoutReqSub?.cancel();
     _layoutAlongGuideReqSub?.cancel();
     _swapReqSub?.cancel();
@@ -488,7 +501,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // captured by some node border on almost every move.
     final bool snapSuppressed = HardwareKeyboard.instance.isShiftPressed;
 
-    bool shouldCheckForSnapping = !snapSuppressed &&
+    bool shouldCheckForSnapping =
+        !snapSuppressed &&
         (((tool == EditorTool.arrowTopRight || tool == EditorTool.line) &&
                 !_isDrawing) ||
             (_isDrawing &&
@@ -571,7 +585,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // is a localized segment on the node, NOT the screen-spanning SnapGuide used
     // for node alignment.
     (Offset, Offset)? centerSegment;
-    final draggingEndpoint = _isResizing.handle == Handle.arrowStart ||
+    final draggingEndpoint =
+        _isResizing.handle == Handle.arrowStart ||
         _isResizing.handle == Handle.arrowEnd;
     if (draggingEndpoint && newSnapPoint != null) {
       final targetRect = canvasState.nodes[newSnapPoint.objectId] != null
@@ -584,11 +599,13 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         final onVert = rp.dx < 0.02 || rp.dx > 0.98; // left/right edge
         // Extend the guide a little past the node so the center line reads
         // clearly without spanning the whole canvas.
-        final overshoot = 0.25 * (onHoriz ? targetRect.height : targetRect.width);
+        final overshoot =
+            0.25 * (onHoriz ? targetRect.height : targetRect.width);
         if (onHoriz && (rp.dx - 0.5).abs() < centerBand) {
           newSnapPoint = (
             objectId: newSnapPoint.objectId,
-            worldPosition: targetRect.topLeft +
+            worldPosition:
+                targetRect.topLeft +
                 Offset(targetRect.width * 0.5, targetRect.height * rp.dy),
             relativePosition: Offset(0.5, rp.dy),
           );
@@ -600,7 +617,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         } else if (onVert && (rp.dy - 0.5).abs() < centerBand) {
           newSnapPoint = (
             objectId: newSnapPoint.objectId,
-            worldPosition: targetRect.topLeft +
+            worldPosition:
+                targetRect.topLeft +
                 Offset(targetRect.width * rp.dx, targetRect.height * 0.5),
             relativePosition: Offset(rp.dx, 0.5),
           );
@@ -613,14 +631,17 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       }
     }
 
-    if (newSnapPoint != _hoveredSnapPoint || centerSegment != _endpointCenterGuide) {
+    if (newSnapPoint != _hoveredSnapPoint ||
+        centerSegment != _endpointCenterGuide) {
       // Always track the CURRENT nearest snap point (or null when the cursor
       // leaves every snap band). The old code returned early when both an
       // existing start-snap and a new snap were present, which froze
       // _hoveredSnapPoint at its first value and made a dragged endpoint stick
       // to whatever it first snapped to — you couldn't drag back out.
       _hoveredSnapPoint = newSnapPoint;
-      if (shouldCheckForSnapping && _startSnapPoint == null && newSnapPoint != null) {
+      if (shouldCheckForSnapping &&
+          _startSnapPoint == null &&
+          newSnapPoint != null) {
         _startSnapPoint = newSnapPoint;
       }
       _endpointCenterGuide = centerSegment;
@@ -680,7 +701,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (details.pointerCount < 2) return;
 
     final state = _canvasBloc.state;
-    final newZoom = (_scaleStartZoom * details.scale).clamp(_computeMinZoom(), double.infinity);
+    final newZoom = (_scaleStartZoom * details.scale).clamp(
+      _computeMinZoom(),
+      double.infinity,
+    );
 
     final editorBounds = getEditorBoundsInScreen(kNodeEditorWidgetKey);
     if (editorBounds == null) return;
@@ -711,7 +735,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // pan and incorrectly snapping zoom when scale == 1.0.
     if (event.scale == 1.0) return;
     final state = _canvasBloc.state;
-    final newZoom = (_scaleStartZoom * event.scale).clamp(_computeMinZoom(), double.infinity);
+    final newZoom = (_scaleStartZoom * event.scale).clamp(
+      _computeMinZoom(),
+      double.infinity,
+    );
     final editorBounds = getEditorBoundsInScreen(kNodeEditorWidgetKey);
     if (editorBounds == null) return;
     final focalPointRelativeToCenter = event.position - editorBounds.center;
@@ -739,22 +766,28 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (editorBounds == null) return;
       final focalPointRelativeToCenter = event.position - editorBounds.center;
       final zoomPanCorrection =
-          focalPointRelativeToCenter *
-          (1 / newZoom - 1 / state.viewportZoom);
-      _canvasBloc.add(CanvasTransformed(
-        zoom: newZoom,
-        offset: state.viewportOffset + zoomPanCorrection,
-      ));
+          focalPointRelativeToCenter * (1 / newZoom - 1 / state.viewportZoom);
+      _canvasBloc.add(
+        CanvasTransformed(
+          zoom: newZoom,
+          offset: state.viewportOffset + zoomPanCorrection,
+        ),
+      );
     } else if (event is PointerScrollEvent) {
       final state = _canvasBloc.state;
-      final isZoomModifier = HardwareKeyboard.instance.isMetaPressed ||
+      final isZoomModifier =
+          HardwareKeyboard.instance.isMetaPressed ||
           HardwareKeyboard.instance.isControlPressed;
       if (isZoomModifier) {
         final zoomDelta = -event.scrollDelta.dy * 0.001;
         final newZoom = state.viewportZoom * (1 + zoomDelta);
-        _canvasBloc.add(CanvasZoomed(newZoom.clamp(_computeMinZoom(), double.infinity)));
+        _canvasBloc.add(
+          CanvasZoomed(newZoom.clamp(_computeMinZoom(), double.infinity)),
+        );
       } else {
-        final panDelta = Offset(event.scrollDelta.dx, event.scrollDelta.dy) / state.viewportZoom;
+        final panDelta =
+            Offset(event.scrollDelta.dx, event.scrollDelta.dy) /
+            state.viewportZoom;
         _canvasBloc.add(CanvasPanned(-panDelta));
       }
     }
@@ -786,7 +819,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     final objectId = selection.selectedDrawingObjectIds.first;
     final object = _canvasBloc.state.drawingObjects[objectId];
-    if (object == null || !(object is RectangleObject || object is CircleObject)) {
+    if (object == null ||
+        !(object is RectangleObject || object is CircleObject)) {
       return false;
     }
 
@@ -800,17 +834,38 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     final edgeApproachFromLeft = <String, List<bool>>{};
     for (final obj in _canvasBloc.state.drawingObjects.values) {
       if (obj is ArrowObject || obj is LineObject) {
-        final startAtt = obj is ArrowObject ? obj.startAttachment : (obj as LineObject).startAttachment;
-        final endAtt = obj is ArrowObject ? obj.endAttachment : (obj as LineObject).endAttachment;
+        final startAtt = obj is ArrowObject
+            ? obj.startAttachment
+            : (obj as LineObject).startAttachment;
+        final endAtt = obj is ArrowObject
+            ? obj.endAttachment
+            : (obj as LineObject).endAttachment;
         final otherEnd = obj is ArrowObject ? obj.end : (obj as LineObject).end;
-        final otherStart = obj is ArrowObject ? obj.start : (obj as LineObject).start;
-        for (final (att, otherPoint) in [(startAtt, otherEnd), (endAtt, otherStart)]) {
+        final otherStart = obj is ArrowObject
+            ? obj.start
+            : (obj as LineObject).start;
+        for (final (att, otherPoint) in [
+          (startAtt, otherEnd),
+          (endAtt, otherStart),
+        ]) {
           if (att != null && att.objectId == objectId) {
             final rp = att.relativePosition;
-            if (rp.dy < 0.25) (edgeApproachFromLeft['top'] ??= []).add(otherPoint.dx < object.rect.center.dx);
-            if (rp.dy > 0.75) (edgeApproachFromLeft['bottom'] ??= []).add(otherPoint.dx < object.rect.center.dx);
-            if (rp.dx < 0.25) (edgeApproachFromLeft['left'] ??= []).add(otherPoint.dy < object.rect.center.dy);
-            if (rp.dx > 0.75) (edgeApproachFromLeft['right'] ??= []).add(otherPoint.dy < object.rect.center.dy);
+            if (rp.dy < 0.25)
+              (edgeApproachFromLeft['top'] ??= []).add(
+                otherPoint.dx < object.rect.center.dx,
+              );
+            if (rp.dy > 0.75)
+              (edgeApproachFromLeft['bottom'] ??= []).add(
+                otherPoint.dx < object.rect.center.dx,
+              );
+            if (rp.dx < 0.25)
+              (edgeApproachFromLeft['left'] ??= []).add(
+                otherPoint.dy < object.rect.center.dy,
+              );
+            if (rp.dx > 0.75)
+              (edgeApproachFromLeft['right'] ??= []).add(
+                otherPoint.dy < object.rect.center.dy,
+              );
           }
         }
       }
@@ -819,7 +874,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     Offset _edgeOffset(String edge) {
       final approaches = edgeApproachFromLeft[edge];
       if (approaches == null) return Offset.zero;
-      final mostlyFromLeft = approaches.where((b) => b).length >= approaches.length / 2;
+      final mostlyFromLeft =
+          approaches.where((b) => b).length >= approaches.length / 2;
       switch (edge) {
         case 'top':
         case 'bottom':
@@ -833,10 +889,22 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     }
 
     final localPositions = {
-      QuickActionDirection.top: object.rect.topCenter - Offset(0, spacing + halfHandle) + _edgeOffset('top'),
-      QuickActionDirection.right: object.rect.centerRight + Offset(spacing + halfHandle, 0) + _edgeOffset('right'),
-      QuickActionDirection.bottom: object.rect.bottomCenter + Offset(0, spacing + halfHandle) + _edgeOffset('bottom'),
-      QuickActionDirection.left: object.rect.centerLeft - Offset(spacing + halfHandle, 0) + _edgeOffset('left'),
+      QuickActionDirection.top:
+          object.rect.topCenter -
+          Offset(0, spacing + halfHandle) +
+          _edgeOffset('top'),
+      QuickActionDirection.right:
+          object.rect.centerRight +
+          Offset(spacing + halfHandle, 0) +
+          _edgeOffset('right'),
+      QuickActionDirection.bottom:
+          object.rect.bottomCenter +
+          Offset(0, spacing + halfHandle) +
+          _edgeOffset('bottom'),
+      QuickActionDirection.left:
+          object.rect.centerLeft -
+          Offset(spacing + halfHandle, 0) +
+          _edgeOffset('left'),
     };
 
     for (var entry in localPositions.entries) {
@@ -873,7 +941,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// clipboard when only nodes are selected. Returns true if anything was
   /// copied.
   Future<bool> _copySelection(
-      CanvasState canvasState, SelectionState selectionState) async {
+    CanvasState canvasState,
+    SelectionState selectionState,
+  ) async {
     final selectedDrawing = selectionState.selectedDrawingObjectIds
         .map((id) => canvasState.drawingObjects[id])
         .whereType<DrawingObject>()
@@ -892,7 +962,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// Pastes clipboard contents at the current cursor position and selects any
   /// newly pasted drawing objects.
   void _pasteAtCursor(CanvasState canvasState) {
-    final worldPos = screenToWorld(
+    final worldPos =
+        screenToWorld(
           _lastFocalPoint,
           canvasState.viewportOffset,
           canvasState.viewportZoom,
@@ -961,7 +1032,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // Double-click detection: check BEFORE requesting canvas focus so
     // the text editor can acquire focus without contention.
     final now = DateTime.now();
-    final isDoubleClick = _lastClickTime != null &&
+    final isDoubleClick =
+        _lastClickTime != null &&
         _lastClickPosition != null &&
         now.difference(_lastClickTime!).inMilliseconds < 500 &&
         (event.position - _lastClickPosition!).distance < 60;
@@ -1019,10 +1091,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       // still works — the drag-end re-attaches as before.)
       if (_hoveredHandle.handle == Handle.arrowStart ||
           _hoveredHandle.handle == Handle.arrowEnd) {
-        _selectionBloc.add(EndpointSelected((
-          objectId: _hoveredHandle.objectId,
-          isStart: _hoveredHandle.handle == Handle.arrowStart,
-        )));
+        _selectionBloc.add(
+          EndpointSelected((
+            objectId: _hoveredHandle.objectId,
+            isStart: _hoveredHandle.handle == Handle.arrowStart,
+          )),
+        );
       }
       _isResizing = _hoveredHandle;
       // Reset movement tracking so a pure tap (no drag) doesn't commit a change
@@ -1159,8 +1233,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
             final leftDiff = movingRect.left - guide.position;
             final rightDiff = movingRect.right - guide.position;
             final centerDiff = movingRect.center.dx - guide.position;
-            final minDiff = [leftDiff, rightDiff, centerDiff]
-                .reduce((a, b) => a.abs() < b.abs() ? a : b);
+            final minDiff = [
+              leftDiff,
+              rightDiff,
+              centerDiff,
+            ].reduce((a, b) => a.abs() < b.abs() ? a : b);
             if (minDiff.abs() < bestDxAbs) {
               bestDxAbs = minDiff.abs();
               bestDx = minDiff;
@@ -1169,8 +1246,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
             final topDiff = movingRect.top - guide.position;
             final bottomDiff = movingRect.bottom - guide.position;
             final centerDiff = movingRect.center.dy - guide.position;
-            final minDiff = [topDiff, bottomDiff, centerDiff]
-                .reduce((a, b) => a.abs() < b.abs() ? a : b);
+            final minDiff = [
+              topDiff,
+              bottomDiff,
+              centerDiff,
+            ].reduce((a, b) => a.abs() < b.abs() ? a : b);
             if (minDiff.abs() < bestDyAbs) {
               bestDyAbs = minDiff.abs();
               bestDy = minDiff;
@@ -1229,14 +1309,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       // ORIGIN (start) is attached; Cmd re-ports edges whose DESTINATION (end)
       // is attached. Both are combinable.
       final reportStart = HardwareKeyboard.instance.isAltPressed;
-      final reportEnd = HardwareKeyboard.instance.isMetaPressed ||
+      final reportEnd =
+          HardwareKeyboard.instance.isMetaPressed ||
           HardwareKeyboard.instance.isControlPressed;
       if ((reportStart || reportEnd) && _reportDragNodeIds.isNotEmpty) {
         _reportDraggedEdges(reportStart: reportStart, reportEnd: reportEnd);
       }
     } else if (_isAreaSelecting) {
       setState(
-            () => _selectionArea = Rect.fromPoints(_selectionStart, worldPos),
+        () => _selectionArea = Rect.fromPoints(_selectionStart, worldPos),
       );
     } else if (_isDrawing) {
       _handleObjectDrawing(worldPos, event.pressure);
@@ -1277,17 +1358,21 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         // Tell the bloc which axes were held to an alignment guide so its
         // release-time grid snap leaves those axes alone (otherwise it pulls the
         // selection off the guide and bends attached edges).
-        final alignedX = _activeSnapGuides
-            .any((g) => g.axis == SnapGuideAxis.vertical);
-        final alignedY = _activeSnapGuides
-            .any((g) => g.axis == SnapGuideAxis.horizontal);
-        _canvasBloc.add(ObjectsDragEnded(
-          _selectionBloc.state.selectedNodeIds.union(
-            _selectionBloc.state.selectedDrawingObjectIds,
+        final alignedX = _activeSnapGuides.any(
+          (g) => g.axis == SnapGuideAxis.vertical,
+        );
+        final alignedY = _activeSnapGuides.any(
+          (g) => g.axis == SnapGuideAxis.horizontal,
+        );
+        _canvasBloc.add(
+          ObjectsDragEnded(
+            _selectionBloc.state.selectedNodeIds.union(
+              _selectionBloc.state.selectedDrawingObjectIds,
+            ),
+            alignedX: alignedX,
+            alignedY: alignedY,
           ),
-          alignedX: alignedX,
-          alignedY: alignedY,
-        ));
+        );
       } else if (_pendingDeselect != null) {
         // Pure click (no real drag) on an already-selected object with the
         // additive modifier held → toggle it off now.
@@ -1336,8 +1421,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       _isRotating = true;
       _rotationStartCenter = object.rect.center;
       _originalObjectAngle = object.angle;
-      _rotationStartAngle =
-          (worldPos - _rotationStartCenter).direction;
+      _rotationStartAngle = (worldPos - _rotationStartCenter).direction;
     });
   }
 
@@ -1382,7 +1466,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         _beginTextEditing(existingObject: obj);
         return;
       }
-      if ((obj is RectangleObject || obj is CircleObject || obj is DiamondObject || obj is ParallelogramObject) &&
+      if ((obj is RectangleObject ||
+              obj is CircleObject ||
+              obj is DiamondObject ||
+              obj is ParallelogramObject) &&
           obj.rect.inflate(hitPadding).contains(worldPos)) {
         _beginShapeTextEditing(obj);
         return;
@@ -1418,12 +1505,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     final rect = snapRect(
       Rect.fromCenter(center: worldPos, width: 160 * iz, height: 100 * iz),
     );
-    final newObject = RectangleObject(id: const Uuid().v4(), rect: rect, creationZoom: cz);
+    final newObject = RectangleObject(
+      id: const Uuid().v4(),
+      rect: rect,
+      creationZoom: cz,
+    );
     _canvasBloc.add(DrawingObjectAdded(newObject));
-    _selectionBloc.add(SelectionReplaced(
-      nodeIds: const {},
-      drawingObjectIds: {newObject.id},
-    ));
+    _selectionBloc.add(
+      SelectionReplaced(nodeIds: const {}, drawingObjectIds: {newObject.id}),
+    );
     // Ensure we're in the default (arrow/select) tool so editing isn't
     // interrupted by a still-active shape tool.
     _toolBloc.add(const ToolSelected(EditorTool.arrow));
@@ -1532,10 +1622,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// Selects [id], centres it in view, and enters inline text editing on it
   /// (deferred a frame so selection/rebuild settle before the editor attaches).
   void _selectAndEditNode(String id) {
-    _selectionBloc.add(SelectionReplaced(
-      nodeIds: const {},
-      drawingObjectIds: {id},
-    ));
+    _selectionBloc.add(
+      SelectionReplaced(nodeIds: const {}, drawingObjectIds: {id}),
+    );
     final obj = _canvasBloc.state.drawingObjects[id];
     if (obj == null) return;
     _ensureRectVisible(obj.rect);
@@ -1588,8 +1677,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     );
 
     final newId = const Uuid().v4();
-    final newObject =
-        RectangleObject(id: newId, rect: newRect, creationZoom: source.creationZoom);
+    final newObject = RectangleObject(
+      id: newId,
+      rect: newRect,
+      creationZoom: source.creationZoom,
+    );
     _canvasBloc.add(DrawingObjectAdded(newObject));
 
     // Directed arrow from the source node's right edge to the new node's left
@@ -1613,10 +1705,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     );
     _canvasBloc.add(DrawingObjectAdded(arrow));
 
-    _selectionBloc.add(SelectionReplaced(
-      nodeIds: const {},
-      drawingObjectIds: {newId},
-    ));
+    _selectionBloc.add(
+      SelectionReplaced(nodeIds: const {}, drawingObjectIds: {newId}),
+    );
     _toolBloc.add(const ToolSelected(EditorTool.arrow));
     // Pan so the new node is comfortably in view — Tab can march the chain off
     // the right edge, so follow it. Centring keeps room for the next Tab too.
@@ -1695,7 +1786,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Label (leave empty to remove)'),
+          decoration: const InputDecoration(
+            hintText: 'Label (leave empty to remove)',
+          ),
           onSubmitted: (v) => Navigator.of(ctx).pop(v),
         ),
         actions: [
@@ -1720,9 +1813,11 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     Future.delayed(const Duration(milliseconds: 350), controller.dispose);
     if (newLabel == null) return; // cancelled
     final trimmed = newLabel.trim();
-    final updated = (trimmed.isEmpty
-        ? arrow.copyWith(clearArrowLabel: true)
-        : arrow.copyWith(arrowLabel: trimmed)) as ArrowObject;
+    final updated =
+        (trimmed.isEmpty
+                ? arrow.copyWith(clearArrowLabel: true)
+                : arrow.copyWith(arrowLabel: trimmed))
+            as ArrowObject;
     _canvasBloc.add(DrawingObjectUpdated(updated));
   }
 
@@ -1735,10 +1830,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         !selectionState.selectedDrawingObjectIds.contains(hitObjectId) &&
         !selectionState.selectedNodeIds.contains(hitObjectId)) {
       final isNode = _canvasBloc.state.nodes.containsKey(hitObjectId);
-      _selectionBloc.add(SelectionReplaced(
-        nodeIds: isNode ? {hitObjectId} : {},
-        drawingObjectIds: !isNode ? {hitObjectId} : {},
-      ));
+      _selectionBloc.add(
+        SelectionReplaced(
+          nodeIds: isNode ? {hitObjectId} : {},
+          drawingObjectIds: !isNode ? {hitObjectId} : {},
+        ),
+      );
     }
 
     final selectedIds = _selectionBloc.state.selectedDrawingObjectIds;
@@ -1763,10 +1860,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         switch (action) {
           case CanvasContextMenuAction.cut:
             _canvasBloc.add(SelectionCut());
-            _canvasBloc.add(ObjectsRemoved(
-              nodeIds: _selectionBloc.state.selectedNodeIds,
-              drawingObjectIds: ids,
-            ));
+            _canvasBloc.add(
+              ObjectsRemoved(
+                nodeIds: _selectionBloc.state.selectedNodeIds,
+                drawingObjectIds: ids,
+              ),
+            );
             _selectionBloc.add(SelectionCleared());
           case CanvasContextMenuAction.copy:
             _canvasBloc.add(SelectionCopied());
@@ -1781,18 +1880,19 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
             }
           case CanvasContextMenuAction.selectAll:
             final canvasState = _canvasBloc.state;
-            _selectionBloc.add(SelectionReplaced(
-              nodeIds: canvasState.nodes.keys.toSet(),
-              drawingObjectIds: canvasState.drawingObjects.keys.toSet(),
-            ));
+            _selectionBloc.add(
+              SelectionReplaced(
+                nodeIds: canvasState.nodes.keys.toSet(),
+                drawingObjectIds: canvasState.drawingObjects.keys.toSet(),
+              ),
+            );
           case CanvasContextMenuAction.duplicate:
             _canvasBloc.add(SelectionDuplicated(ids));
             final newIds = _canvasBloc.consumeLastDuplicatedIds();
             if (newIds.isNotEmpty) {
-              _selectionBloc.add(SelectionReplaced(
-                nodeIds: {},
-                drawingObjectIds: newIds,
-              ));
+              _selectionBloc.add(
+                SelectionReplaced(nodeIds: {}, drawingObjectIds: newIds),
+              );
             }
           case CanvasContextMenuAction.flipArrow:
             for (final id in ids) {
@@ -1851,14 +1951,18 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           case CanvasContextMenuAction.alignBottom:
             _canvasBloc.add(ObjectsAligned(ids, AlignmentType.bottom));
           case CanvasContextMenuAction.distributeHorizontal:
-            _canvasBloc.add(ObjectsDistributed(ids, DistributionType.horizontal));
+            _canvasBloc.add(
+              ObjectsDistributed(ids, DistributionType.horizontal),
+            );
           case CanvasContextMenuAction.distributeVertical:
             _canvasBloc.add(ObjectsDistributed(ids, DistributionType.vertical));
           case CanvasContextMenuAction.delete:
-            _canvasBloc.add(ObjectsRemoved(
-              nodeIds: _selectionBloc.state.selectedNodeIds,
-              drawingObjectIds: ids,
-            ));
+            _canvasBloc.add(
+              ObjectsRemoved(
+                nodeIds: _selectionBloc.state.selectedNodeIds,
+                drawingObjectIds: ids,
+              ),
+            );
             _selectionBloc.add(SelectionCleared());
         }
       },
@@ -1893,7 +1997,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         // toggles it OFF — but only on a pure click. If this turns into a drag
         // the modifier means something else (Alt/Cmd re-port endpoints), so we
         // defer the toggle to pointer-up and let the drag proceed.
-        _pendingDeselect = (nodeIds: nodeIds, drawingObjectIds: drawingObjectIds);
+        _pendingDeselect = (
+          nodeIds: nodeIds,
+          drawingObjectIds: drawingObjectIds,
+        );
       } else if (!alreadySelected) {
         if (isShiftPressed) {
           _selectionBloc.add(
@@ -1983,7 +2090,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (handle == Handle.arrowStart || handle == Handle.arrowEnd) {
         // Shift = free drag: skip object-snap (cleared in _updateSnapHandle)
         // AND grid-snap, so the endpoint follows the cursor exactly.
-        final dragPos = _hoveredSnapPoint?.worldPosition ??
+        final dragPos =
+            _hoveredSnapPoint?.worldPosition ??
             (HardwareKeyboard.instance.isShiftPressed
                 ? worldPos
                 : snapOffset(worldPos));
@@ -2063,7 +2171,6 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           waypoints: waypoints,
         );
         _canvasBloc.add(DrawingObjectUpdated(updatedObject));
-
       } else {
         if (handle == Handle.midPoint) {
           final midPoint = (worldPos * 2) - (start * 0.5) - (end * 0.5);
@@ -2075,12 +2182,16 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     } else if (object is LineObject) {
       final (start, end) = _getDynamicEndpoints(object);
 
-      if (_isResizing.handle == Handle.arrowStart || _isResizing.handle == Handle.arrowEnd) {
-        final dragPos = _hoveredSnapPoint?.worldPosition ??
+      if (_isResizing.handle == Handle.arrowStart ||
+          _isResizing.handle == Handle.arrowEnd) {
+        final dragPos =
+            _hoveredSnapPoint?.worldPosition ??
             (HardwareKeyboard.instance.isShiftPressed
                 ? worldPos
                 : snapOffset(worldPos));
-        final tempStart = _isResizing.handle == Handle.arrowStart ? dragPos : start;
+        final tempStart = _isResizing.handle == Handle.arrowStart
+            ? dragPos
+            : start;
         final tempEnd = _isResizing.handle == Handle.arrowEnd ? dragPos : end;
         setState(() {
           _tempDrawingObject = TempDrawingObject(
@@ -2104,20 +2215,28 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final Offset anchorWorld;
       switch (handle) {
         case Handle.topLeft:
-          anchorWorld = _originalResizeRect!.bottomRight
-              .rotate(_originalResizeRect!.center, object.angle);
+          anchorWorld = _originalResizeRect!.bottomRight.rotate(
+            _originalResizeRect!.center,
+            object.angle,
+          );
           break;
         case Handle.topRight:
-          anchorWorld = _originalResizeRect!.bottomLeft
-              .rotate(_originalResizeRect!.center, object.angle);
+          anchorWorld = _originalResizeRect!.bottomLeft.rotate(
+            _originalResizeRect!.center,
+            object.angle,
+          );
           break;
         case Handle.bottomRight:
-          anchorWorld = _originalResizeRect!.topLeft
-              .rotate(_originalResizeRect!.center, object.angle);
+          anchorWorld = _originalResizeRect!.topLeft.rotate(
+            _originalResizeRect!.center,
+            object.angle,
+          );
           break;
         case Handle.bottomLeft:
-          anchorWorld = _originalResizeRect!.topRight
-              .rotate(_originalResizeRect!.center, object.angle);
+          anchorWorld = _originalResizeRect!.topRight.rotate(
+            _originalResizeRect!.center,
+            object.angle,
+          );
           break;
         default:
           return;
@@ -2134,12 +2253,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         final newAspectRatio =
             localDragVector.dx.abs() / localDragVector.dy.abs();
         if (newAspectRatio > aspectRatio) {
-          localDragVector = Offset(localDragVector.dx,
-              localDragVector.dx.abs() / aspectRatio * localDragVector.dy.sign);
+          localDragVector = Offset(
+            localDragVector.dx,
+            localDragVector.dx.abs() / aspectRatio * localDragVector.dy.sign,
+          );
         } else {
           localDragVector = Offset(
-              localDragVector.dy.abs() * aspectRatio * localDragVector.dx.sign,
-              localDragVector.dy);
+            localDragVector.dy.abs() * aspectRatio * localDragVector.dx.sign,
+            localDragVector.dy,
+          );
         }
         dragVector = localDragVector.rotate(Offset.zero, object.angle);
       }
@@ -2175,7 +2297,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (obj.id == excludeId) continue;
       if (excludeIds != null && excludeIds.contains(obj.id)) continue;
       // Skip arrows, lines, pencil strokes — only solid objects are obstacles
-      if (obj is ArrowObject || obj is LineObject || obj is PencilStrokeObject) {
+      if (obj is ArrowObject ||
+          obj is LineObject ||
+          obj is PencilStrokeObject) {
         continue;
       }
       obstacles.add(obj.rect);
@@ -2201,12 +2325,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   Rect _textHitRect(TextObject obj) {
     final painter = obj.layoutPainter();
     return obj.rect.expandToInclude(
-      Rect.fromLTWH(
-        obj.rect.left,
-        obj.rect.top,
-        painter.width,
-        painter.height,
-      ),
+      Rect.fromLTWH(obj.rect.left, obj.rect.top, painter.width, painter.height),
     );
   }
 
@@ -2413,39 +2532,46 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final rx = rect.width / 2;
       final ry = rect.height / 2;
       const segments = 120;
-      return ([
-        for (int i = 0; i < segments; i++)
-          Offset(
-            c.dx + rx * cos(2 * pi * i / segments),
-            c.dy + ry * sin(2 * pi * i / segments),
-          ),
-      ], true);
+      return (
+        [
+          for (int i = 0; i < segments; i++)
+            Offset(
+              c.dx + rx * cos(2 * pi * i / segments),
+              c.dy + ry * sin(2 * pi * i / segments),
+            ),
+        ],
+        true,
+      );
     }
     if (obj is RectangleObject) {
-      return ([
-        rect.topLeft,
-        rect.topRight,
-        rect.bottomRight,
-        rect.bottomLeft,
-      ], true);
+      return (
+        [rect.topLeft, rect.topRight, rect.bottomRight, rect.bottomLeft],
+        true,
+      );
     }
     if (obj is DiamondObject) {
       final c = rect.center;
-      return ([
-        Offset(c.dx, rect.top),
-        Offset(rect.right, c.dy),
-        Offset(c.dx, rect.bottom),
-        Offset(rect.left, c.dy),
-      ], true);
+      return (
+        [
+          Offset(c.dx, rect.top),
+          Offset(rect.right, c.dy),
+          Offset(c.dx, rect.bottom),
+          Offset(rect.left, c.dy),
+        ],
+        true,
+      );
     }
     if (obj is ParallelogramObject) {
       final skew = min(obj.skewOffset, rect.width / 2);
-      return ([
-        Offset(rect.left + skew, rect.top),
-        Offset(rect.right, rect.top),
-        Offset(rect.right - skew, rect.bottom),
-        Offset(rect.left, rect.bottom),
-      ], true);
+      return (
+        [
+          Offset(rect.left + skew, rect.top),
+          Offset(rect.right, rect.top),
+          Offset(rect.right - skew, rect.bottom),
+          Offset(rect.left, rect.bottom),
+        ],
+        true,
+      );
     }
     return null;
   }
@@ -2490,17 +2616,19 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     if (guides.isEmpty) {
       showNodeEditorSnackbar(
-          'Select a guide (pen stroke, line, circle, diamond, or '
-          'parallelogram) plus the nodes to arrange, then click "Lay on path" '
-          '(⇧⌘U).',
-          SnackbarType.info);
+        'Select a guide (pen stroke, line, circle, diamond, or '
+        'parallelogram) plus the nodes to arrange, then click "Lay on path" '
+        '(⇧⌘U).',
+        SnackbarType.info,
+      );
       return;
     }
     if (guides.length > 1) {
       showNodeEditorSnackbar(
-          'Select exactly one guide shape to lay nodes along (the rest of the '
-          'selection is treated as nodes).',
-          SnackbarType.warning);
+        'Select exactly one guide shape to lay nodes along (the rest of the '
+        'selection is treated as nodes).',
+        SnackbarType.warning,
+      );
       return;
     }
     final (guideObj, polyline, closed) = guides.first;
@@ -2525,7 +2653,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     if (centres.isEmpty) {
       showNodeEditorSnackbar(
-          'Also select the nodes to lay along the guide.', SnackbarType.info);
+        'Also select the nodes to lay along the guide.',
+        SnackbarType.info,
+      );
       return;
     }
 
@@ -2583,9 +2713,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final o = _canvasBloc.state.drawingObjects[id];
       return o is ArrowObject || o is LineObject;
     });
-    if (!hasEdge &&
-        boxIds.length == 2 &&
-        nodeIds.length + objIds.length == 2) {
+    if (!hasEdge && boxIds.length == 2 && nodeIds.length + objIds.length == 2) {
       return _SwapKind.nodes;
     }
     return _SwapKind.none;
@@ -2602,9 +2730,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         _swapTwoEdgeEndpoints();
       case _SwapKind.none:
         showNodeEditorSnackbar(
-            'Select exactly two nodes (to swap positions) or two edges (to '
-            'swap their endpoints), then Swap.',
-            SnackbarType.info);
+          'Select exactly two nodes (to swap positions) or two edges (to '
+          'swap their endpoints), then Swap.',
+          SnackbarType.info,
+        );
     }
   }
 
@@ -2612,7 +2741,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// undoable [AutoLayoutApplied]; sizes are preserved.
   void _swapTwoBoxes() {
     final sel = _selectionBloc.state;
-    final ids = <String>[...sel.selectedNodeIds, ...sel.selectedDrawingObjectIds];
+    final ids = <String>[
+      ...sel.selectedNodeIds,
+      ...sel.selectedDrawingObjectIds,
+    ];
     final rects = <String, Rect>{};
     for (final id in ids) {
       final r = _layoutBoxRect(id);
@@ -2729,7 +2861,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (tool == EditorTool.arrowTopRight) {
       if ((_drawingStart - endPos).distance > 2) {
         final hasAttachments = startAttachment != null || endAttachment != null;
-        final snapStart = hasAttachments ? _drawingStart : snapOffset(_drawingStart);
+        final snapStart = hasAttachments
+            ? _drawingStart
+            : snapOffset(_drawingStart);
         final snapEnd = hasAttachments ? endPos : snapOffset(endPos);
         newObject = ArrowObject(
           id: id,
@@ -2747,40 +2881,78 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (_currentPencilPoints.length > 1) {
         // Guide-routing is disabled (path-shaping proved intractable). Pencil
         // strokes are always freehand ink again, regardless of Alt.
-        newObject = PencilStrokeObject(id: id, points: _currentPencilPoints, creationZoom: _canvasBloc.state.viewportZoom);
+        newObject = PencilStrokeObject(
+          id: id,
+          points: _currentPencilPoints,
+          creationZoom: _canvasBloc.state.viewportZoom,
+        );
       }
     } else {
       final snappedStart = snapOffset(_drawingStart);
       final snappedEnd = snapOffset(_tempDrawingObject!.end);
-      final rect = Rect.fromPoints(
-        snappedStart,
-        snappedEnd,
-      ).normalize;
+      final rect = Rect.fromPoints(snappedStart, snappedEnd).normalize;
       final isTap = rect.width <= 2 && rect.height <= 2;
       isTapCreated = isTap;
       final iz = 1.0 / _canvasBloc.state.viewportZoom;
       final shapeRect = isTap
-          ? snapRect(Rect.fromCenter(center: snappedStart, width: 160 * iz, height: 100 * iz))
+          ? snapRect(
+              Rect.fromCenter(
+                center: snappedStart,
+                width: 160 * iz,
+                height: 100 * iz,
+              ),
+            )
           : snapRect(rect);
       final cz = _canvasBloc.state.viewportZoom;
       switch (tool) {
         case EditorTool.circle:
-          newObject = CircleObject(id: id, rect: shapeRect, lineStyle: lineStyle, creationZoom: cz);
+          newObject = CircleObject(
+            id: id,
+            rect: shapeRect,
+            lineStyle: lineStyle,
+            creationZoom: cz,
+          );
           break;
         case EditorTool.square:
-          newObject = RectangleObject(id: id, rect: shapeRect, lineStyle: lineStyle, creationZoom: cz);
+          newObject = RectangleObject(
+            id: id,
+            rect: shapeRect,
+            lineStyle: lineStyle,
+            creationZoom: cz,
+          );
           break;
         case EditorTool.diamond:
-          newObject = DiamondObject(id: id, rect: shapeRect, lineStyle: lineStyle, creationZoom: cz);
+          newObject = DiamondObject(
+            id: id,
+            rect: shapeRect,
+            lineStyle: lineStyle,
+            creationZoom: cz,
+          );
           break;
         case EditorTool.parallelogram:
-          newObject = ParallelogramObject(id: id, rect: shapeRect, lineStyle: lineStyle, creationZoom: cz);
+          newObject = ParallelogramObject(
+            id: id,
+            rect: shapeRect,
+            lineStyle: lineStyle,
+            creationZoom: cz,
+          );
           break;
         case EditorTool.forkJoin:
           final forkRect = isTap
-              ? snapRect(Rect.fromCenter(center: snappedStart, width: 160 * iz, height: 10 * iz))
+              ? snapRect(
+                  Rect.fromCenter(
+                    center: snappedStart,
+                    width: 160 * iz,
+                    height: 10 * iz,
+                  ),
+                )
               : snapRect(Rect.fromLTWH(rect.left, rect.top, rect.width, 10));
-          newObject = ForkJoinObject(id: id, rect: forkRect, lineStyle: lineStyle, creationZoom: cz);
+          newObject = ForkJoinObject(
+            id: id,
+            rect: forkRect,
+            lineStyle: lineStyle,
+            creationZoom: cz,
+          );
           break;
         case EditorTool.arrowTopRight:
           if (!isTap) {
@@ -2796,7 +2968,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           break;
         case EditorTool.line:
           if (!isTap) {
-            final hasAttachments = startAttachment != null || endAttachment != null;
+            final hasAttachments =
+                startAttachment != null || endAttachment != null;
             newObject = LineObject(
               id: id,
               start: hasAttachments ? _drawingStart : snappedStart,
@@ -2821,19 +2994,28 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     if (newObject != null) {
       _canvasBloc.add(DrawingObjectAdded(newObject));
-      if (isTapCreated && (newObject is RectangleObject || newObject is CircleObject || newObject is ParallelogramObject)) {
-        _selectionBloc.add(SelectionReplaced(
-          nodeIds: const {},
-          drawingObjectIds: {newObject.id},
-        ));
+      if (isTapCreated &&
+          (newObject is RectangleObject ||
+              newObject is CircleObject ||
+              newObject is ParallelogramObject)) {
+        _selectionBloc.add(
+          SelectionReplaced(
+            nodeIds: const {},
+            drawingObjectIds: {newObject.id},
+          ),
+        );
         _toolBloc.add(const ToolSelected(EditorTool.arrow));
       }
     } else {
       _selectionBloc.add(SelectionCleared());
     }
 
-    final autoEditObject = (isTapCreated && newObject != null &&
-        (newObject is RectangleObject || newObject is CircleObject || newObject is ParallelogramObject))
+    final autoEditObject =
+        (isTapCreated &&
+            newObject != null &&
+            (newObject is RectangleObject ||
+                newObject is CircleObject ||
+                newObject is ParallelogramObject))
         ? newObject
         : null;
 
@@ -2867,7 +3049,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (temp != null &&
         (_isResizing.handle == Handle.arrowStart ||
             _isResizing.handle == Handle.arrowEnd)) {
-      final newPos = _isResizing.handle == Handle.arrowEnd ? temp.end : temp.start;
+      final newPos = _isResizing.handle == Handle.arrowEnd
+          ? temp.end
+          : temp.start;
       final attachment = _hoveredSnapPoint != null
           ? ObjectAttachment(
               objectId: _hoveredSnapPoint!.objectId,
@@ -2888,6 +3072,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           clearStartAttachment: draggingStart && attachment == null,
           clearEndAttachment: !draggingStart && attachment == null,
           waypoints: temp.waypoints,
+          // A hand-placed endpoint is deliberate; keep automatic port passes
+          // from moving it afterwards.
+          portsPinned: attachment != null ? true : null,
         );
       } else if (object is LineObject) {
         finalObject = object.copyWith(
@@ -2910,9 +3097,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         relativePosition: _hoveredSnapPoint!.relativePosition,
       );
       if (_isResizing.handle == Handle.arrowEnd) {
-        finalObject = (object).copyWith(endAttachment: endAttachment);
+        finalObject = (object).copyWith(
+          endAttachment: endAttachment,
+          portsPinned: true,
+        );
       } else if (_isResizing.handle == Handle.arrowStart) {
-        finalObject = (object).copyWith(startAttachment: endAttachment);
+        finalObject = (object).copyWith(
+          startAttachment: endAttachment,
+          portsPinned: true,
+        );
       }
     }
 
@@ -2945,39 +3138,38 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     var start = objectWithEndpoints.start as Offset;
     var end = objectWithEndpoints.end as Offset;
     final startAttachment =
-    objectWithEndpoints.startAttachment as ObjectAttachment?;
-    final endAttachment = objectWithEndpoints.endAttachment as ObjectAttachment?;
+        objectWithEndpoints.startAttachment as ObjectAttachment?;
+    final endAttachment =
+        objectWithEndpoints.endAttachment as ObjectAttachment?;
     final canvasState = _canvasBloc.state;
 
     if (startAttachment != null) {
       final targetNode = canvasState.nodes[startAttachment.objectId];
       final targetObject = canvasState.drawingObjects[startAttachment.objectId];
-      final Rect? targetRect =
-      targetNode != null ? getNodeBoundsInWorld(targetNode) : targetObject?.rect;
+      final Rect? targetRect = targetNode != null
+          ? getNodeBoundsInWorld(targetNode)
+          : targetObject?.rect;
 
       if (targetRect != null) {
         final relPos = startAttachment.relativePosition;
-        start = targetRect.topLeft +
-            Offset(
-              targetRect.width * relPos.dx,
-              targetRect.height * relPos.dy,
-            );
+        start =
+            targetRect.topLeft +
+            Offset(targetRect.width * relPos.dx, targetRect.height * relPos.dy);
       }
     }
 
     if (endAttachment != null) {
       final targetNode = canvasState.nodes[endAttachment.objectId];
       final targetObject = canvasState.drawingObjects[endAttachment.objectId];
-      final Rect? targetRect =
-      targetNode != null ? getNodeBoundsInWorld(targetNode) : targetObject?.rect;
+      final Rect? targetRect = targetNode != null
+          ? getNodeBoundsInWorld(targetNode)
+          : targetObject?.rect;
 
       if (targetRect != null) {
         final relPos = endAttachment.relativePosition;
-        end = targetRect.topLeft +
-            Offset(
-              targetRect.width * relPos.dx,
-              targetRect.height * relPos.dy,
-            );
+        end =
+            targetRect.topLeft +
+            Offset(targetRect.width * relPos.dx, targetRect.height * relPos.dy);
       }
     }
     return (start, end);
@@ -3020,7 +3212,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       if (obj is ArrowObject) {
         final s = obj.startAttachment?.objectId;
         final t = obj.endAttachment?.objectId;
-        if (s != null && t != null && boxIds.contains(s) && boxIds.contains(t)) {
+        if (s != null &&
+            t != null &&
+            boxIds.contains(s) &&
+            boxIds.contains(t)) {
           edges.add((s, t));
         }
       }
@@ -3105,10 +3300,13 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// changes the geometry for both sides). Only edges touching a dragged box are
   /// affected, and we only emit an update when a port actually changes so the
   /// move stays cheap.
-  void _reportDraggedEdges({required bool reportStart, required bool reportEnd}) {
+  void _reportDraggedEdges({
+    required bool reportStart,
+    required bool reportEnd,
+  }) {
     final dragged = _reportDragNodeIds;
     for (final obj in _canvasBloc.state.drawingObjects.values) {
-      if (obj is! ArrowObject) continue;
+      if (obj is! ArrowObject || obj.portsPinned) continue;
       final sAtt = obj.startAttachment;
       final eAtt = obj.endAttachment;
       if (sAtt == null || eAtt == null) continue;
@@ -3128,15 +3326,24 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final newStart = _facingPort(sRect, eRect);
       final newEnd = _facingPort(eRect, sRect);
 
-      if (newStart == sAtt.relativePosition && newEnd == eAtt.relativePosition) {
+      if (newStart == sAtt.relativePosition &&
+          newEnd == eAtt.relativePosition) {
         continue;
       }
-      _canvasBloc.add(DrawingObjectUpdated(obj.copyWith(
-        startAttachment:
-            ObjectAttachment(objectId: sAtt.objectId, relativePosition: newStart),
-        endAttachment:
-            ObjectAttachment(objectId: eAtt.objectId, relativePosition: newEnd),
-      )));
+      _canvasBloc.add(
+        DrawingObjectUpdated(
+          obj.copyWith(
+            startAttachment: ObjectAttachment(
+              objectId: sAtt.objectId,
+              relativePosition: newStart,
+            ),
+            endAttachment: ObjectAttachment(
+              objectId: eAtt.objectId,
+              relativePosition: newEnd,
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -3170,7 +3377,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     }
 
     for (final obj in canvasState.drawingObjects.values) {
-      if (obj is! ArrowObject) continue;
+      if (obj is! ArrowObject || obj.portsPinned) continue;
       final sId = obj.startAttachment?.objectId;
       final tId = obj.endAttachment?.objectId;
       if (sId == null || tId == null) continue;
@@ -3208,10 +3415,20 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         endRel = bottom;
       }
 
-      _canvasBloc.add(DrawingObjectUpdated(obj.copyWith(
-        startAttachment: ObjectAttachment(objectId: sId, relativePosition: startRel),
-        endAttachment: ObjectAttachment(objectId: tId, relativePosition: endRel),
-      )));
+      _canvasBloc.add(
+        DrawingObjectUpdated(
+          obj.copyWith(
+            startAttachment: ObjectAttachment(
+              objectId: sId,
+              relativePosition: startRel,
+            ),
+            endAttachment: ObjectAttachment(
+              objectId: tId,
+              relativePosition: endRel,
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -3234,7 +3451,6 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     }
     return null;
   }
-
 
   String? _findHitObject(Offset worldPos) {
     final canvasState = _canvasBloc.state;
@@ -3270,7 +3486,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           dist = _distanceToPolyline(rendered, worldPos, tolerance);
         } else {
           dist = _distanceToPolyline(
-              _sampleQuadratic(start, controlPoint, end), worldPos, tolerance);
+            _sampleQuadratic(start, controlPoint, end),
+            worldPos,
+            tolerance,
+          );
         }
         if (dist != null && dist < closestConnectionDist) {
           closestConnectionDist = dist;
@@ -3282,7 +3501,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         final controlPoint = obj.midPoint ?? (start + end) / 2;
 
         final dist = _distanceToPolyline(
-            _sampleQuadratic(start, controlPoint, end), worldPos, tolerance);
+          _sampleQuadratic(start, controlPoint, end),
+          worldPos,
+          tolerance,
+        );
         if (dist != null && dist < closestConnectionDist) {
           closestConnectionDist = dist;
           closestConnectionId = obj.id;
@@ -3306,7 +3528,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     for (final node in canvasState.nodes.values) {
       final nodeBounds = getNodeBoundsInWorld(node);
-      if (nodeBounds != null && nodeBounds.inflate(hitPadding).contains(worldPos)) {
+      if (nodeBounds != null &&
+          nodeBounds.inflate(hitPadding).contains(worldPos)) {
         return node.id;
       }
     }
@@ -3340,10 +3563,16 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// sampling, which was costing ~hundreds of ms per pointer move across all
   /// arrows during hover hit-testing.
   double? _distanceToPolyline(
-      List<Offset> pts, Offset point, double tolerance) {
+    List<Offset> pts,
+    Offset point,
+    double tolerance,
+  ) {
     if (pts.length < 2) return null;
     // Cheap bounding-box reject.
-    double minX = pts[0].dx, maxX = pts[0].dx, minY = pts[0].dy, maxY = pts[0].dy;
+    double minX = pts[0].dx,
+        maxX = pts[0].dx,
+        minY = pts[0].dy,
+        maxY = pts[0].dy;
     for (final p in pts) {
       if (p.dx < minX) minX = p.dx;
       if (p.dx > maxX) maxX = p.dx;
@@ -3365,8 +3594,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   }
 
   /// Samples a quadratic bezier into a short polyline for cheap hit-testing.
-  List<Offset> _sampleQuadratic(Offset p0, Offset c, Offset p1,
-      {int segments = 16}) {
+  List<Offset> _sampleQuadratic(
+    Offset p0,
+    Offset c,
+    Offset p1, {
+    int segments = 16,
+  }) {
     final pts = <Offset>[];
     for (int i = 0; i <= segments; i++) {
       final t = i / segments;
@@ -3406,7 +3639,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     }
 
     for (final obj in _canvasBloc.state.drawingObjects.values) {
-      final hitRect = obj is TextObject ? _textHitRect(obj) : _renderedBounds(obj);
+      final hitRect = obj is TextObject
+          ? _textHitRect(obj)
+          : _renderedBounds(obj);
       if (area.overlaps(hitRect)) {
         drawingObjectIds.add(obj.id);
       }
@@ -3551,9 +3786,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         final selectionRect = obj.rect.inflate(4.0 / canvasState.viewportZoom);
         // topRight is the dedicated rotation handle, offset away from object
         final rotOffset = 8.0 / canvasState.viewportZoom;
-        final rotationCorner = selectionRect.topRight + Offset(rotOffset, -rotOffset);
-        consider(objectId, Handle.rotate,
-            (localPos - rotationCorner).distance, rotationHitAreaRadius, 1.0);
+        final rotationCorner =
+            selectionRect.topRight + Offset(rotOffset, -rotOffset);
+        consider(
+          objectId,
+          Handle.rotate,
+          (localPos - rotationCorner).distance,
+          rotationHitAreaRadius,
+          1.0,
+        );
 
         // Other 3 corners are resize handles
         final resizeHandles = {
@@ -3562,8 +3803,13 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
           Handle.bottomLeft: selectionRect.bottomLeft,
         };
         for (final entry in resizeHandles.entries) {
-          consider(objectId, entry.key, (localPos - entry.value).distance,
-              handleHitAreaRadius, 1.0);
+          consider(
+            objectId,
+            entry.key,
+            (localPos - entry.value).distance,
+            handleHitAreaRadius,
+            1.0,
+          );
         }
       } else if (obj is ArrowObject) {
         final (start, end) = _getDynamicEndpoints(obj);
@@ -3592,35 +3838,64 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         final Offset hitStart = useRendered ? rendered.first : start;
         final Offset hitEnd = useRendered ? rendered.last : end;
 
-        consider(objectId, Handle.arrowStart, (worldPos - hitStart).distance,
-            handleHitAreaRadius * endpointRadiusFactor, endpointDistanceBias);
-        consider(objectId, Handle.arrowEnd, (worldPos - hitEnd).distance,
-            handleHitAreaRadius * endpointRadiusFactor, endpointDistanceBias);
+        consider(
+          objectId,
+          Handle.arrowStart,
+          (worldPos - hitStart).distance,
+          handleHitAreaRadius * endpointRadiusFactor,
+          endpointDistanceBias,
+        );
+        consider(
+          objectId,
+          Handle.arrowEnd,
+          (worldPos - hitEnd).distance,
+          handleHitAreaRadius * endpointRadiusFactor,
+          endpointDistanceBias,
+        );
 
         // For orthogonal arrows with waypoints, hide the midpoint handle.
-        final hasWaypoints = obj.pathType == LinkPathType.orthogonal &&
+        final hasWaypoints =
+            obj.pathType == LinkPathType.orthogonal &&
             obj.waypoints != null &&
             obj.waypoints!.isNotEmpty;
         if (!hasWaypoints) {
           final midHandlePos = obj.pathType == LinkPathType.orthogonal
               ? cornerPoint
               : onCurveMidPoint;
-          consider(objectId, Handle.midPoint,
-              (worldPos - midHandlePos).distance, handleHitAreaRadius,
-              midPointDistanceBias);
+          consider(
+            objectId,
+            Handle.midPoint,
+            (worldPos - midHandlePos).distance,
+            handleHitAreaRadius,
+            midPointDistanceBias,
+          );
         }
       } else if (obj is LineObject) {
         final (start, end) = _getDynamicEndpoints(obj);
         final midPoint = obj.midPoint ?? (start + end) / 2.0;
         final onCurveMidPoint =
             (start * 0.25) + (midPoint * 0.5) + (end * 0.25);
-        consider(objectId, Handle.arrowStart, (worldPos - start).distance,
-            handleHitAreaRadius * endpointRadiusFactor, endpointDistanceBias);
-        consider(objectId, Handle.arrowEnd, (worldPos - end).distance,
-            handleHitAreaRadius * endpointRadiusFactor, endpointDistanceBias);
-        consider(objectId, Handle.midPoint,
-            (worldPos - onCurveMidPoint).distance, handleHitAreaRadius,
-            midPointDistanceBias);
+        consider(
+          objectId,
+          Handle.arrowStart,
+          (worldPos - start).distance,
+          handleHitAreaRadius * endpointRadiusFactor,
+          endpointDistanceBias,
+        );
+        consider(
+          objectId,
+          Handle.arrowEnd,
+          (worldPos - end).distance,
+          handleHitAreaRadius * endpointRadiusFactor,
+          endpointDistanceBias,
+        );
+        consider(
+          objectId,
+          Handle.midPoint,
+          (worldPos - onCurveMidPoint).distance,
+          handleHitAreaRadius,
+          midPointDistanceBias,
+        );
       }
     }
 
@@ -3706,10 +3981,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
         }
       }
       if (touchingArrowIds.isEmpty) return;
-      _canvasBloc.add(CrossingsMinimized(
-        touchingArrowIds,
-        changeConnectionPoints: true,
-      ));
+      _canvasBloc.add(
+        CrossingsMinimized(touchingArrowIds, changeConnectionPoints: true),
+      );
     });
   }
 
@@ -3739,14 +4013,23 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   /// edge ([endpointSlide]: -1 left / +1 right) or switch which endpoint is
   /// picked ([endpointSwitch]: -1 up / +1 down). Otherwise fall back to nudging
   /// the current object selection by [nudge].
-  void _onArrowKey(Offset nudge,
-      {int? endpointSlide, int? endpointSwitch, bool fine = false}) {
+  void _onArrowKey(
+    Offset nudge, {
+    int? endpointSlide,
+    int? endpointSwitch,
+    bool fine = false,
+  }) {
     final sel = _selectionBloc.state.selectedEndpoint;
     if (sel != null) {
       if (endpointSlide != null) {
-        _canvasBloc.add(EndpointMovedAlongEdge(
-            sel.objectId, sel.isStart, endpointSlide,
-            fine: fine));
+        _canvasBloc.add(
+          EndpointMovedAlongEdge(
+            sel.objectId,
+            sel.isStart,
+            endpointSlide,
+            fine: fine,
+          ),
+        );
         return;
       }
       if (endpointSwitch != null) {
@@ -3780,15 +4063,17 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     if (nodeId == null) {
       // Unattached: just flip start <-> end of this edge.
       _selectionBloc.add(
-          EndpointSelected((objectId: sel.objectId, isStart: !sel.isStart)));
+        EndpointSelected((objectId: sel.objectId, isStart: !sel.isStart)),
+      );
       return;
     }
 
     // Resolve the node rect to order endpoints by angle around its centre.
     final cs = _canvasBloc.state;
     final node = cs.nodes[nodeId];
-    final Rect? rect =
-        node != null ? getNodeBoundsInWorld(node) : cs.drawingObjects[nodeId]?.rect;
+    final Rect? rect = node != null
+        ? getNodeBoundsInWorld(node)
+        : cs.drawingObjects[nodeId]?.rect;
     if (rect == null) return;
 
     final next = nextEndpointOnNode(
@@ -3813,7 +4098,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       const initialText = 'Text';
       // fontSize in world units: 16 screen-px / zoom, so text appears as
       // 16px on screen at creation zoom and scales naturally with zoom.
-      final initialStyle = TextStyle(fontSize: 16.0 / zoom, color: Colors.white);
+      final initialStyle = TextStyle(
+        fontSize: 16.0 / zoom,
+        color: Colors.white,
+      );
 
       // Rect in world units: ~60×24 screen-px / zoom.
       final w = 60.0 / zoom;
@@ -4010,7 +4298,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     overlayEntry = OverlayEntry(
       builder: (context) {
         final editorBox =
-            kNodeEditorWidgetKey.currentContext!.findRenderObject() as RenderBox;
+            kNodeEditorWidgetKey.currentContext!.findRenderObject()
+                as RenderBox;
         final editorSize = editorBox.size;
         final editorGlobalOffset = editorBox.localToGlobal(Offset.zero);
 
@@ -4018,8 +4307,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
             (anchorWorld.dx + offset.dx) * zoom + editorSize.width / 2;
         final screenY =
             (anchorWorld.dy + offset.dy) * zoom + editorSize.height / 2;
-        final globalPosition =
-            Offset(screenX, screenY) + editorGlobalOffset;
+        final globalPosition = Offset(screenX, screenY) + editorGlobalOffset;
 
         return Stack(
           children: [
@@ -4081,7 +4369,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                         controller: textEditingController,
                         focusNode: focusNode,
                         style: const TextStyle(
-                            fontSize: 13, color: Colors.black87),
+                          fontSize: 13,
+                          color: Colors.black87,
+                        ),
                         maxLines: null,
                         minLines: 1,
                         autofocus: true,
@@ -4149,7 +4439,9 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                       Text(
                         comment.text,
                         style: const TextStyle(
-                            fontSize: 13, color: Colors.black87),
+                          fontSize: 13,
+                          color: Colors.black87,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Row(
@@ -4159,28 +4451,32 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.black54,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: Size.zero,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: () {
-                              _canvasBloc
-                                  .add(CommentResolvedToggled(comment.id));
+                              _canvasBloc.add(
+                                CommentResolvedToggled(comment.id),
+                              );
                               close();
                             },
                             child: Text(
-                                comment.resolved ? 'Reopen' : 'Resolve'),
+                              comment.resolved ? 'Reopen' : 'Resolve',
+                            ),
                           ),
                           const SizedBox(width: 4),
                           TextButton(
                             style: TextButton.styleFrom(
                               foregroundColor: Colors.red.shade700,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               minimumSize: Size.zero,
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             onPressed: () {
                               _canvasBloc.add(CommentRemoved(comment.id));
@@ -4207,12 +4503,20 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
   DrawingObject? _editingShapeObject;
   RichTextEditingController? _shapeTextController;
   FocusNode? _shapeTextFocusNode;
-  TextStyle _shapeTextStyle = const TextStyle(fontSize: 16, color: Colors.white, fontFamily: 'Courier');
+  TextStyle _shapeTextStyle = const TextStyle(
+    fontSize: 16,
+    color: Colors.white,
+    fontFamily: 'Courier',
+  );
 
   DateTime? _shapeEditOpenedAt;
 
   void _beginShapeTextEditing(DrawingObject shapeObject) {
-    const defaultStyle = TextStyle(fontSize: 16, color: Colors.white, fontFamily: 'Courier');
+    const defaultStyle = TextStyle(
+      fontSize: 16,
+      color: Colors.white,
+      fontFamily: 'Courier',
+    );
     final canvasState = _canvasBloc.state;
 
     String? existingText;
@@ -4252,7 +4556,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
     // Seed runs from richText when present, else from the plain text (so legacy
     // single-style nodes still edit as one uniform run).
-    final seedRuns = existingRuns ??
+    final seedRuns =
+        existingRuns ??
         (existingText != null && existingText.isNotEmpty
             ? [TextRun(existingText)]
             : null);
@@ -4260,8 +4565,10 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     _shapeTextController?.dispose();
     _shapeTextFocusNode?.dispose();
 
-    final controller =
-        RichTextEditingController(base: baseStyle, runs: seedRuns);
+    final controller = RichTextEditingController(
+      base: baseStyle,
+      runs: seedRuns,
+    );
     _shapeTextController = controller;
     _shapeTextFocusNode = FocusNode();
     _shapeTextStyle = baseStyle;
@@ -4311,9 +4618,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     List<TextRun>? newRuns = newText.isEmpty ? null : controller?.toRuns();
     // Drop a single inherited run to null — it's indistinguishable from plain
     // text and keeps round-tripping/serialization minimal.
-    if (newRuns != null &&
-        newRuns.length == 1 &&
-        !newRuns.first.hasOverrides) {
+    if (newRuns != null && newRuns.length == 1 && !newRuns.first.hasOverrides) {
       newRuns = null;
     }
 
@@ -4394,338 +4699,620 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       onPointerPanZoomUpdate: _onPointerPanZoomUpdate,
       onPointerPanZoomEnd: _onPointerPanZoomEnd,
       child: BlocBuilder<CanvasBloc, CanvasState>(
-      builder: (context, canvasState) {
-        return BlocBuilder<SelectionBloc, SelectionState>(
-          builder: (context, selectionState) {
-            return BlocBuilder<ToolBloc, ToolState>(
-              builder: (context, toolState) {
-                final Widget canvasChild = RepaintBoundary(
-                  child: ShaderBuilder(
-                    assetKey: widget.fragmentShader,
-                        (context, gridShader, child) =>
-                        FlowDrawEditorRenderObjectWidget(
-                          key: kNodeEditorWidgetKey,
-                          canvasState: canvasState,
-                          selectionState: selectionState,
-                          style: const FlowDrawEditorStyle(),
-                          gridShader: gridShader,
-                          tempDrawingObject: _tempDrawingObject,
-                          selectionArea: _selectionArea,
-                          headerBuilder: widget.headerBuilder,
-                          nodeBuilder: widget.nodeBuilder,
-                          snapHandlePosition: _hoveredSnapPoint?.worldPosition,
-                          snapGuides: _activeSnapGuides,
-                          endpointCenterGuide: _endpointCenterGuide,
-                          debugShowHitAreas: _debugShowHitAreas,
-                        ),
-                  ),
-                );
-
-                return CallbackShortcuts(
-                  bindings: (_editingShapeObject != null ||
-                          _isEditingText ||
-                          _textInputHasFocus)
-                      ? const {}
-                      : {
-                    const SingleActivator(LogicalKeyboardKey.delete): () =>
-                      _canvasBloc.add(ObjectsRemoved(
-                        nodeIds: selectionState.selectedNodeIds,
-                        drawingObjectIds: selectionState.selectedDrawingObjectIds,
-                      )),
-                    const SingleActivator(LogicalKeyboardKey.backspace): () =>
-                      _canvasBloc.add(ObjectsRemoved(
-                        nodeIds: selectionState.selectedNodeIds,
-                        drawingObjectIds: selectionState.selectedDrawingObjectIds,
-                      )),
-                    // Tab (grow graph rightward) is handled in the canvas
-                    // Focus.onKeyEvent so it wins over focus traversal.
-                    // Enter on a selected (not editing) node starts editing it.
-                    const SingleActivator(LogicalKeyboardKey.enter): () =>
-                      _editSelectedShape(),
-                    const SingleActivator(LogicalKeyboardKey.numpadEnter): () =>
-                      _editSelectedShape(),
-                    // Tidy: layered auto-layout to minimize edge crossings.
-                    const SingleActivator(LogicalKeyboardKey.keyL,
-                        meta: true, shift: true): _applyAutoLayout,
-                    const SingleActivator(LogicalKeyboardKey.keyL,
-                        control: true, shift: true): _applyAutoLayout,
-                    // Lay selected nodes out along the selected guide shape.
-                    // (Cmd/Ctrl+Shift+P is swallowed by macOS, so use U.)
-                    const SingleActivator(LogicalKeyboardKey.keyU,
-                            meta: true, shift: true):
-                        _layoutSelectionAlongSelectedGuide,
-                    const SingleActivator(LogicalKeyboardKey.keyU,
-                            control: true, shift: true):
-                        _layoutSelectionAlongSelectedGuide,
-                    // Swap: exchange two nodes' positions, or two edges' ends.
-                    const SingleActivator(LogicalKeyboardKey.keyS,
-                        meta: true, shift: true): _swapSelection,
-                    const SingleActivator(LogicalKeyboardKey.keyS,
-                        control: true, shift: true): _swapSelection,
-                    const SingleActivator(LogicalKeyboardKey.keyC, meta: true): () async {
-                      if (_textInputHasFocus) return;
-                      await _copySelection(canvasState, selectionState);
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyC, control: true): () async {
-                      if (_textInputHasFocus) return;
-                      await _copySelection(canvasState, selectionState);
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyV, meta: true): () {
-                      // A focused text input (incl. external overlays like the
-                      // flan annotation box) must get the paste itself.
-                      if (_textInputHasFocus) return;
-                      _pasteAtCursor(canvasState);
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyV, control: true): () {
-                      if (_textInputHasFocus) return;
-                      _pasteAtCursor(canvasState);
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyX, meta: true): () async {
-                      if (_textInputHasFocus) return;
-                      final copied = await _copySelection(canvasState, selectionState);
-                      if (copied) {
-                        _canvasBloc.add(ObjectsRemoved(
-                          nodeIds: selectionState.selectedNodeIds,
-                          drawingObjectIds: selectionState.selectedDrawingObjectIds,
-                        ));
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyX, control: true): () async {
-                      if (_textInputHasFocus) return;
-                      final copied = await _copySelection(canvasState, selectionState);
-                      if (copied) {
-                        _canvasBloc.add(ObjectsRemoved(
-                          nodeIds: selectionState.selectedNodeIds,
-                          drawingObjectIds: selectionState.selectedDrawingObjectIds,
-                        ));
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyZ, meta: true): () =>
-                      _canvasBloc.add(UndoRequested()),
-                    const SingleActivator(LogicalKeyboardKey.keyZ, control: true): () =>
-                      _canvasBloc.add(UndoRequested()),
-                    const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true): () =>
-                      _canvasBloc.add(RedoRequested()),
-                    const SingleActivator(LogicalKeyboardKey.keyY, control: true): () =>
-                      _canvasBloc.add(RedoRequested()),
-                    // Debug: toggle hit-area overlay
-                    const SingleActivator(LogicalKeyboardKey.keyH, meta: true, shift: true): () =>
-                      setState(() => _debugShowHitAreas = !_debugShowHitAreas),
-                    const SingleActivator(LogicalKeyboardKey.keyH, control: true, shift: true): () =>
-                      setState(() => _debugShowHitAreas = !_debugShowHitAreas),
-                    // Duplicate selection
-                    const SingleActivator(LogicalKeyboardKey.keyD, meta: true): () {
-                      _canvasBloc.add(SelectionDuplicated(selectionState.selectedDrawingObjectIds));
-                      final newIds = _canvasBloc.consumeLastDuplicatedIds();
-                      if (newIds.isNotEmpty) {
-                        _selectionBloc.add(SelectionReplaced(
-                          nodeIds: {},
-                          drawingObjectIds: newIds,
-                        ));
-                      }
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyD, control: true): () {
-                      _canvasBloc.add(SelectionDuplicated(selectionState.selectedDrawingObjectIds));
-                      final newIds = _canvasBloc.consumeLastDuplicatedIds();
-                      if (newIds.isNotEmpty) {
-                        _selectionBloc.add(SelectionReplaced(
-                          nodeIds: {},
-                          drawingObjectIds: newIds,
-                        ));
-                      }
-                    },
-                    // Z-ordering
-                    const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true): () =>
-                      _canvasBloc.add(ObjectsBroughtForward(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketRight, control: true): () =>
-                      _canvasBloc.add(ObjectsBroughtForward(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true): () =>
-                      _canvasBloc.add(ObjectsSentBackward(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketLeft, control: true): () =>
-                      _canvasBloc.add(ObjectsSentBackward(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketRight, meta: true, shift: true): () =>
-                      _canvasBloc.add(ObjectsBroughtToFront(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketRight, control: true, shift: true): () =>
-                      _canvasBloc.add(ObjectsBroughtToFront(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketLeft, meta: true, shift: true): () =>
-                      _canvasBloc.add(ObjectsSentToBack(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.bracketLeft, control: true, shift: true): () =>
-                      _canvasBloc.add(ObjectsSentToBack(selectionState.selectedDrawingObjectIds)),
-                    const SingleActivator(LogicalKeyboardKey.keyA, meta: true): () {
-                      final canvasState = _canvasBloc.state;
-                      _selectionBloc.add(SelectionReplaced(
-                        nodeIds: canvasState.nodes.keys.toSet(),
-                        drawingObjectIds: canvasState.drawingObjects.keys.toSet(),
-                      ));
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyA, control: true): () {
-                      final canvasState = _canvasBloc.state;
-                      _selectionBloc.add(SelectionReplaced(
-                        nodeIds: canvasState.nodes.keys.toSet(),
-                        drawingObjectIds: canvasState.drawingObjects.keys.toSet(),
-                      ));
-                    },
-                    const SingleActivator(LogicalKeyboardKey.keyV): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.arrow)),
-                    const SingleActivator(LogicalKeyboardKey.keyR): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.square)),
-                    const SingleActivator(LogicalKeyboardKey.keyO): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.circle)),
-                    const SingleActivator(LogicalKeyboardKey.keyG): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.diamond)),
-                    const SingleActivator(LogicalKeyboardKey.keyP): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.parallelogram)),
-                    const SingleActivator(LogicalKeyboardKey.keyJ): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.forkJoin)),
-                    const SingleActivator(LogicalKeyboardKey.keyA): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.arrowTopRight)),
-                    const SingleActivator(LogicalKeyboardKey.keyL): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.line)),
-                    const SingleActivator(LogicalKeyboardKey.keyD): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.pencil)),
-                    const SingleActivator(LogicalKeyboardKey.keyT): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.text)),
-                    const SingleActivator(LogicalKeyboardKey.keyF): () =>
-                      _toolBloc.add(const ToolSelected(EditorTool.figure)),
-                    const SingleActivator(LogicalKeyboardKey.keyG, meta: true): () =>
-                      _canvasBloc.add(const GridToggled()),
-                    const SingleActivator(LogicalKeyboardKey.keyG, control: true): () =>
-                      _canvasBloc.add(const GridToggled()),
-                    // Nudge: arrow keys = 1 grid square, shift+arrow = 1px.
-                    // When an edge endpoint is picked, the arrow keys instead
-                    // slide it along its node edge (L/R) or switch the picked
-                    // endpoint (U/D).
-                    const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
-                      _onArrowKey(const Offset(0, -kGridSize), endpointSwitch: -1),
-                    const SingleActivator(LogicalKeyboardKey.arrowDown): () =>
-                      _onArrowKey(const Offset(0, kGridSize), endpointSwitch: 1),
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-                      _onArrowKey(const Offset(-kGridSize, 0), endpointSlide: -1),
-                    const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-                      _onArrowKey(const Offset(kGridSize, 0), endpointSlide: 1),
-                    // Shift+arrow = fine (1px) nudge. With an endpoint picked,
-                    // Shift+L/R slides it ~1px along its node edge; U/D still
-                    // switches the picked endpoint.
-                    const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () =>
-                      _onArrowKey(const Offset(0, -1), endpointSwitch: -1),
-                    const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () =>
-                      _onArrowKey(const Offset(0, 1), endpointSwitch: 1),
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): () =>
-                      _onArrowKey(const Offset(-1, 0), endpointSlide: -1, fine: true),
-                    const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): () =>
-                      _onArrowKey(const Offset(1, 0), endpointSlide: 1, fine: true),
-                    // Cmd/Ctrl+arrow = jump the selection to the nearest node in
-                    // that direction (graph navigation, not movement).
-                    const SingleActivator(LogicalKeyboardKey.arrowUp, meta: true): () =>
-                      _navigateToNode(const Offset(0, -1)),
-                    const SingleActivator(LogicalKeyboardKey.arrowDown, meta: true): () =>
-                      _navigateToNode(const Offset(0, 1)),
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft, meta: true): () =>
-                      _navigateToNode(const Offset(-1, 0)),
-                    const SingleActivator(LogicalKeyboardKey.arrowRight, meta: true): () =>
-                      _navigateToNode(const Offset(1, 0)),
-                    const SingleActivator(LogicalKeyboardKey.arrowUp, control: true): () =>
-                      _navigateToNode(const Offset(0, -1)),
-                    const SingleActivator(LogicalKeyboardKey.arrowDown, control: true): () =>
-                      _navigateToNode(const Offset(0, 1)),
-                    const SingleActivator(LogicalKeyboardKey.arrowLeft, control: true): () =>
-                      _navigateToNode(const Offset(-1, 0)),
-                    const SingleActivator(LogicalKeyboardKey.arrowRight, control: true): () =>
-                      _navigateToNode(const Offset(1, 0)),
-                  },
-                  child: Focus(
-                    focusNode: _canvasFocusNode,
-                    autofocus: true,
-                    // Intercept Tab before the focus traversal system consumes
-                    // it: when a single shape node is selected, Tab grows the
-                    // graph rightward instead of moving focus.
-                    onKeyEvent: (node, event) {
-                      if (event is! KeyDownEvent ||
-                          event.logicalKey != LogicalKeyboardKey.tab) {
-                        return KeyEventResult.ignored;
-                      }
-                      if (_editingShapeObject != null ||
-                          _isEditingText ||
-                          _textInputHasFocus) {
-                        return KeyEventResult.ignored;
-                      }
-                      if (_singleSelectedShape(_selectionBloc.state) == null) {
-                        return KeyEventResult.ignored;
-                      }
-                      _createConnectedNodeToRight(_selectionBloc.state);
-                      return KeyEventResult.handled;
-                    },
-                    child: MouseRegion(
-                    cursor: _getCursor(toolState.activeTool),
-                    onHover: (event) {
-                      if (!_isDrawing &&
-                          _isResizing.handle == Handle.none &&
-                          !_isDraggingSelection &&
-                          !_isPanning) {
-                        _updateHoveredHandle(event.position);
-                      }
-                    },
-                    onExit: (event) {
-                      if (_hoveredHandle.handle != Handle.none) {
-                        setState(
-                              () => _hoveredHandle = (
-                          objectId: '',
-                          handle: Handle.none,
+        builder: (context, canvasState) {
+          return BlocBuilder<SelectionBloc, SelectionState>(
+            builder: (context, selectionState) {
+              return BlocBuilder<ToolBloc, ToolState>(
+                builder: (context, toolState) {
+                  final Widget canvasChild = RepaintBoundary(
+                    child: ShaderBuilder(
+                      assetKey: widget.fragmentShader,
+                      (context, gridShader, child) =>
+                          FlowDrawEditorRenderObjectWidget(
+                            key: kNodeEditorWidgetKey,
+                            canvasState: canvasState,
+                            selectionState: selectionState,
+                            style: const FlowDrawEditorStyle(),
+                            gridShader: gridShader,
+                            tempDrawingObject: _tempDrawingObject,
+                            selectionArea: _selectionArea,
+                            headerBuilder: widget.headerBuilder,
+                            nodeBuilder: widget.nodeBuilder,
+                            snapHandlePosition:
+                                _hoveredSnapPoint?.worldPosition,
+                            snapGuides: _activeSnapGuides,
+                            endpointCenterGuide: _endpointCenterGuide,
+                            debugShowHitAreas: _debugShowHitAreas,
                           ),
-                        );
-                      }
-                    },
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Listener(
-                          behavior: HitTestBehavior.translucent,
-                          onPointerDown: _onPointerDown,
-                          onPointerMove: _onPointerMove,
-                          onPointerUp: _onPointerUp,
-                          onPointerCancel: _onPointerCancel,
-                          onPointerSignal: _onPointerSignal,
-                          child: RawGestureDetector(
-                            gestures: {
-                              ScaleGestureRecognizer: GestureRecognizerFactoryWithHandlers<ScaleGestureRecognizer>(
-                                () => ScaleGestureRecognizer(
-                                  supportedDevices: {
-                                    PointerDeviceKind.touch,
-                                    // Trackpad is handled via Listener onPointerPanZoom
-                                    // and _onPointerSignal to avoid double-processing.
-                                    PointerDeviceKind.mouse,
-                                  },
-                                ),
-                                (instance) {
-                                  instance
-                                    ..onStart = _onScaleStart
-                                    ..onUpdate = _onScaleUpdate
-                                    ..onEnd = _onScaleEnd;
-                                },
-                              ),
-                            },
-                            child: Stack(
-                              children: [
-                                canvasChild,
-                                if (_editingShapeObject != null)
-                                  _buildInlineShapeTextEditor(canvasState),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (selectionState.selectedDrawingObjectIds.length >= 2)
-                          _buildAlignmentToolbar(canvasState, selectionState),
-                      ],
                     ),
-                  ),
-                ),
-                );
-              },
-            );
-          },
-        );
-      },
-    ),
+                  );
+
+                  return CallbackShortcuts(
+                    bindings:
+                        (_editingShapeObject != null ||
+                            _isEditingText ||
+                            _textInputHasFocus)
+                        ? const {}
+                        : {
+                            const SingleActivator(
+                              LogicalKeyboardKey.delete,
+                            ): () => _canvasBloc.add(
+                              ObjectsRemoved(
+                                nodeIds: selectionState.selectedNodeIds,
+                                drawingObjectIds:
+                                    selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.backspace,
+                            ): () => _canvasBloc.add(
+                              ObjectsRemoved(
+                                nodeIds: selectionState.selectedNodeIds,
+                                drawingObjectIds:
+                                    selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            // Tab (grow graph rightward) is handled in the canvas
+                            // Focus.onKeyEvent so it wins over focus traversal.
+                            // Enter on a selected (not editing) node starts editing it.
+                            const SingleActivator(
+                              LogicalKeyboardKey.enter,
+                            ): () =>
+                                _editSelectedShape(),
+                            const SingleActivator(
+                              LogicalKeyboardKey.numpadEnter,
+                            ): () =>
+                                _editSelectedShape(),
+                            // Tidy: layered auto-layout to minimize edge crossings.
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyL,
+                              meta: true,
+                              shift: true,
+                            ): _applyAutoLayout,
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyL,
+                              control: true,
+                              shift: true,
+                            ): _applyAutoLayout,
+                            // Lay selected nodes out along the selected guide shape.
+                            // (Cmd/Ctrl+Shift+P is swallowed by macOS, so use U.)
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyU,
+                              meta: true,
+                              shift: true,
+                            ): _layoutSelectionAlongSelectedGuide,
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyU,
+                              control: true,
+                              shift: true,
+                            ): _layoutSelectionAlongSelectedGuide,
+                            // Swap: exchange two nodes' positions, or two edges' ends.
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyS,
+                              meta: true,
+                              shift: true,
+                            ): _swapSelection,
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyS,
+                              control: true,
+                              shift: true,
+                            ): _swapSelection,
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyC,
+                              meta: true,
+                            ): () async {
+                              if (_textInputHasFocus) return;
+                              await _copySelection(canvasState, selectionState);
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyC,
+                              control: true,
+                            ): () async {
+                              if (_textInputHasFocus) return;
+                              await _copySelection(canvasState, selectionState);
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyV,
+                              meta: true,
+                            ): () {
+                              // A focused text input (incl. external overlays like the
+                              // flan annotation box) must get the paste itself.
+                              if (_textInputHasFocus) return;
+                              _pasteAtCursor(canvasState);
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyV,
+                              control: true,
+                            ): () {
+                              if (_textInputHasFocus) return;
+                              _pasteAtCursor(canvasState);
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyX,
+                              meta: true,
+                            ): () async {
+                              if (_textInputHasFocus) return;
+                              final copied = await _copySelection(
+                                canvasState,
+                                selectionState,
+                              );
+                              if (copied) {
+                                _canvasBloc.add(
+                                  ObjectsRemoved(
+                                    nodeIds: selectionState.selectedNodeIds,
+                                    drawingObjectIds:
+                                        selectionState.selectedDrawingObjectIds,
+                                  ),
+                                );
+                              }
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyX,
+                              control: true,
+                            ): () async {
+                              if (_textInputHasFocus) return;
+                              final copied = await _copySelection(
+                                canvasState,
+                                selectionState,
+                              );
+                              if (copied) {
+                                _canvasBloc.add(
+                                  ObjectsRemoved(
+                                    nodeIds: selectionState.selectedNodeIds,
+                                    drawingObjectIds:
+                                        selectionState.selectedDrawingObjectIds,
+                                  ),
+                                );
+                              }
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyZ,
+                              meta: true,
+                            ): () =>
+                                _canvasBloc.add(UndoRequested()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyZ,
+                              control: true,
+                            ): () =>
+                                _canvasBloc.add(UndoRequested()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyZ,
+                              meta: true,
+                              shift: true,
+                            ): () =>
+                                _canvasBloc.add(RedoRequested()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyY,
+                              control: true,
+                            ): () =>
+                                _canvasBloc.add(RedoRequested()),
+                            // Debug: toggle hit-area overlay
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyH,
+                              meta: true,
+                              shift: true,
+                            ): () => setState(
+                              () => _debugShowHitAreas = !_debugShowHitAreas,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyH,
+                              control: true,
+                              shift: true,
+                            ): () => setState(
+                              () => _debugShowHitAreas = !_debugShowHitAreas,
+                            ),
+                            // Duplicate selection
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyD,
+                              meta: true,
+                            ): () {
+                              _canvasBloc.add(
+                                SelectionDuplicated(
+                                  selectionState.selectedDrawingObjectIds,
+                                ),
+                              );
+                              final newIds = _canvasBloc
+                                  .consumeLastDuplicatedIds();
+                              if (newIds.isNotEmpty) {
+                                _selectionBloc.add(
+                                  SelectionReplaced(
+                                    nodeIds: {},
+                                    drawingObjectIds: newIds,
+                                  ),
+                                );
+                              }
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyD,
+                              control: true,
+                            ): () {
+                              _canvasBloc.add(
+                                SelectionDuplicated(
+                                  selectionState.selectedDrawingObjectIds,
+                                ),
+                              );
+                              final newIds = _canvasBloc
+                                  .consumeLastDuplicatedIds();
+                              if (newIds.isNotEmpty) {
+                                _selectionBloc.add(
+                                  SelectionReplaced(
+                                    nodeIds: {},
+                                    drawingObjectIds: newIds,
+                                  ),
+                                );
+                              }
+                            },
+                            // Z-ordering
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketRight,
+                              meta: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsBroughtForward(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketRight,
+                              control: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsBroughtForward(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketLeft,
+                              meta: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsSentBackward(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketLeft,
+                              control: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsSentBackward(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketRight,
+                              meta: true,
+                              shift: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsBroughtToFront(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketRight,
+                              control: true,
+                              shift: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsBroughtToFront(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketLeft,
+                              meta: true,
+                              shift: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsSentToBack(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.bracketLeft,
+                              control: true,
+                              shift: true,
+                            ): () => _canvasBloc.add(
+                              ObjectsSentToBack(
+                                selectionState.selectedDrawingObjectIds,
+                              ),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyA,
+                              meta: true,
+                            ): () {
+                              final canvasState = _canvasBloc.state;
+                              _selectionBloc.add(
+                                SelectionReplaced(
+                                  nodeIds: canvasState.nodes.keys.toSet(),
+                                  drawingObjectIds: canvasState
+                                      .drawingObjects
+                                      .keys
+                                      .toSet(),
+                                ),
+                              );
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyA,
+                              control: true,
+                            ): () {
+                              final canvasState = _canvasBloc.state;
+                              _selectionBloc.add(
+                                SelectionReplaced(
+                                  nodeIds: canvasState.nodes.keys.toSet(),
+                                  drawingObjectIds: canvasState
+                                      .drawingObjects
+                                      .keys
+                                      .toSet(),
+                                ),
+                              );
+                            },
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyV,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.arrow),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyR,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.square),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyO,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.circle),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyG,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.diamond),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyP,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.parallelogram),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyJ,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.forkJoin),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyA,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.arrowTopRight),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyL,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.line),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyD,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.pencil),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyT,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.text),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyF,
+                            ): () => _toolBloc.add(
+                              const ToolSelected(EditorTool.figure),
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyG,
+                              meta: true,
+                            ): () =>
+                                _canvasBloc.add(const GridToggled()),
+                            const SingleActivator(
+                              LogicalKeyboardKey.keyG,
+                              control: true,
+                            ): () =>
+                                _canvasBloc.add(const GridToggled()),
+                            // Nudge: arrow keys = 1 grid square, shift+arrow = 1px.
+                            // When an edge endpoint is picked, the arrow keys instead
+                            // slide it along its node edge (L/R) or switch the picked
+                            // endpoint (U/D).
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowUp,
+                            ): () => _onArrowKey(
+                              const Offset(0, -kGridSize),
+                              endpointSwitch: -1,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowDown,
+                            ): () => _onArrowKey(
+                              const Offset(0, kGridSize),
+                              endpointSwitch: 1,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowLeft,
+                            ): () => _onArrowKey(
+                              const Offset(-kGridSize, 0),
+                              endpointSlide: -1,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowRight,
+                            ): () => _onArrowKey(
+                              const Offset(kGridSize, 0),
+                              endpointSlide: 1,
+                            ),
+                            // Shift+arrow = fine (1px) nudge. With an endpoint picked,
+                            // Shift+L/R slides it ~1px along its node edge; U/D still
+                            // switches the picked endpoint.
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowUp,
+                              shift: true,
+                            ): () => _onArrowKey(
+                              const Offset(0, -1),
+                              endpointSwitch: -1,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowDown,
+                              shift: true,
+                            ): () => _onArrowKey(
+                              const Offset(0, 1),
+                              endpointSwitch: 1,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowLeft,
+                              shift: true,
+                            ): () => _onArrowKey(
+                              const Offset(-1, 0),
+                              endpointSlide: -1,
+                              fine: true,
+                            ),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowRight,
+                              shift: true,
+                            ): () => _onArrowKey(
+                              const Offset(1, 0),
+                              endpointSlide: 1,
+                              fine: true,
+                            ),
+                            // Cmd/Ctrl+arrow = jump the selection to the nearest node in
+                            // that direction (graph navigation, not movement).
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowUp,
+                              meta: true,
+                            ): () =>
+                                _navigateToNode(const Offset(0, -1)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowDown,
+                              meta: true,
+                            ): () =>
+                                _navigateToNode(const Offset(0, 1)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowLeft,
+                              meta: true,
+                            ): () =>
+                                _navigateToNode(const Offset(-1, 0)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowRight,
+                              meta: true,
+                            ): () =>
+                                _navigateToNode(const Offset(1, 0)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowUp,
+                              control: true,
+                            ): () =>
+                                _navigateToNode(const Offset(0, -1)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowDown,
+                              control: true,
+                            ): () =>
+                                _navigateToNode(const Offset(0, 1)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowLeft,
+                              control: true,
+                            ): () =>
+                                _navigateToNode(const Offset(-1, 0)),
+                            const SingleActivator(
+                              LogicalKeyboardKey.arrowRight,
+                              control: true,
+                            ): () =>
+                                _navigateToNode(const Offset(1, 0)),
+                          },
+                    child: Focus(
+                      focusNode: _canvasFocusNode,
+                      autofocus: true,
+                      // Intercept Tab before the focus traversal system consumes
+                      // it: when a single shape node is selected, Tab grows the
+                      // graph rightward instead of moving focus.
+                      onKeyEvent: (node, event) {
+                        if (event is! KeyDownEvent ||
+                            event.logicalKey != LogicalKeyboardKey.tab) {
+                          return KeyEventResult.ignored;
+                        }
+                        if (_editingShapeObject != null ||
+                            _isEditingText ||
+                            _textInputHasFocus) {
+                          return KeyEventResult.ignored;
+                        }
+                        if (_singleSelectedShape(_selectionBloc.state) ==
+                            null) {
+                          return KeyEventResult.ignored;
+                        }
+                        _createConnectedNodeToRight(_selectionBloc.state);
+                        return KeyEventResult.handled;
+                      },
+                      child: MouseRegion(
+                        cursor: _getCursor(toolState.activeTool),
+                        onHover: (event) {
+                          if (!_isDrawing &&
+                              _isResizing.handle == Handle.none &&
+                              !_isDraggingSelection &&
+                              !_isPanning) {
+                            _updateHoveredHandle(event.position);
+                          }
+                        },
+                        onExit: (event) {
+                          if (_hoveredHandle.handle != Handle.none) {
+                            setState(
+                              () => _hoveredHandle = (
+                                objectId: '',
+                                handle: Handle.none,
+                              ),
+                            );
+                          }
+                        },
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Listener(
+                              behavior: HitTestBehavior.translucent,
+                              onPointerDown: _onPointerDown,
+                              onPointerMove: _onPointerMove,
+                              onPointerUp: _onPointerUp,
+                              onPointerCancel: _onPointerCancel,
+                              onPointerSignal: _onPointerSignal,
+                              child: RawGestureDetector(
+                                gestures: {
+                                  ScaleGestureRecognizer:
+                                      GestureRecognizerFactoryWithHandlers<
+                                        ScaleGestureRecognizer
+                                      >(
+                                        () => ScaleGestureRecognizer(
+                                          supportedDevices: {
+                                            PointerDeviceKind.touch,
+                                            // Trackpad is handled via Listener onPointerPanZoom
+                                            // and _onPointerSignal to avoid double-processing.
+                                            PointerDeviceKind.mouse,
+                                          },
+                                        ),
+                                        (instance) {
+                                          instance
+                                            ..onStart = _onScaleStart
+                                            ..onUpdate = _onScaleUpdate
+                                            ..onEnd = _onScaleEnd;
+                                        },
+                                      ),
+                                },
+                                child: Stack(
+                                  children: [
+                                    canvasChild,
+                                    if (_editingShapeObject != null)
+                                      _buildInlineShapeTextEditor(canvasState),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            if (selectionState
+                                    .selectedDrawingObjectIds
+                                    .length >=
+                                2)
+                              _buildAlignmentToolbar(
+                                canvasState,
+                                selectionState,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
@@ -4807,23 +5394,33 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
             mainAxisSize: MainAxisSize.min,
             children: [
               iconBtn(Icons.align_horizontal_left, 'Align left', () {
-                _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.left));
+                _canvasBloc.add(
+                  ObjectsAligned(selectedIds, AlignmentType.left),
+                );
               }),
               iconBtn(Icons.align_horizontal_center, 'Align center', () {
-                _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.centerH));
+                _canvasBloc.add(
+                  ObjectsAligned(selectedIds, AlignmentType.centerH),
+                );
               }),
               iconBtn(Icons.align_horizontal_right, 'Align right', () {
-                _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.right));
+                _canvasBloc.add(
+                  ObjectsAligned(selectedIds, AlignmentType.right),
+                );
               }),
               const SizedBox(width: 2),
               iconBtn(Icons.align_vertical_top, 'Align top', () {
                 _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.top));
               }),
               iconBtn(Icons.align_vertical_center, 'Align middle', () {
-                _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.centerV));
+                _canvasBloc.add(
+                  ObjectsAligned(selectedIds, AlignmentType.centerV),
+                );
               }),
               iconBtn(Icons.align_vertical_bottom, 'Align bottom', () {
-                _canvasBloc.add(ObjectsAligned(selectedIds, AlignmentType.bottom));
+                _canvasBloc.add(
+                  ObjectsAligned(selectedIds, AlignmentType.bottom),
+                );
               }),
               const SizedBox(width: 2),
               iconBtn(
@@ -4831,10 +5428,12 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                 'Distribute horizontal',
                 canDistribute
                     ? () {
-                        _canvasBloc.add(ObjectsDistributed(
-                          selectedIds,
-                          DistributionType.horizontal,
-                        ));
+                        _canvasBloc.add(
+                          ObjectsDistributed(
+                            selectedIds,
+                            DistributionType.horizontal,
+                          ),
+                        );
                       }
                     : null,
               ),
@@ -4843,20 +5442,24 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                 'Distribute vertical',
                 canDistribute
                     ? () {
-                        _canvasBloc.add(ObjectsDistributed(
-                          selectedIds,
-                          DistributionType.vertical,
-                        ));
+                        _canvasBloc.add(
+                          ObjectsDistributed(
+                            selectedIds,
+                            DistributionType.vertical,
+                          ),
+                        );
                       }
                     : null,
               ),
               const SizedBox(width: 2),
               _MinimizeCrossingsMenuButton(
                 onSelected: (changeConnectionPoints) {
-                  _canvasBloc.add(CrossingsMinimized(
-                    selectedIds,
-                    changeConnectionPoints: changeConnectionPoints,
-                  ));
+                  _canvasBloc.add(
+                    CrossingsMinimized(
+                      selectedIds,
+                      changeConnectionPoints: changeConnectionPoints,
+                    ),
+                  );
                 },
               ),
             ],
@@ -4871,7 +5474,8 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // nudge replaces the object via copyWith, and re-pointing _editingShapeObject
     // happens a microtask later, so reading it here directly could lag a frame.
     final shapeObject =
-        canvasState.drawingObjects[_editingShapeObject!.id] ?? _editingShapeObject!;
+        canvasState.drawingObjects[_editingShapeObject!.id] ??
+        _editingShapeObject!;
     final zoom = canvasState.viewportZoom;
     final offset = canvasState.viewportOffset;
 
@@ -4956,12 +5560,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
                         // for a selected, non-editing node) while staying in edit
                         // mode. Left/Right are NOT intercepted, so they keep
                         // moving the text caret. Also handles key-repeat.
-                        if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+                        if ((event is KeyDownEvent ||
+                                event is KeyRepeatEvent) &&
                             (event.logicalKey == LogicalKeyboardKey.arrowUp ||
-                                event.logicalKey == LogicalKeyboardKey.arrowDown)) {
+                                event.logicalKey ==
+                                    LogicalKeyboardKey.arrowDown)) {
                           final fine = HardwareKeyboard.instance.isShiftPressed;
                           final step = fine ? 1.0 : kGridSize;
-                          final dy = event.logicalKey == LogicalKeyboardKey.arrowUp
+                          final dy =
+                              event.logicalKey == LogicalKeyboardKey.arrowUp
                               ? -step
                               : step;
                           _nudgeEditingShape(Offset(0, dy));

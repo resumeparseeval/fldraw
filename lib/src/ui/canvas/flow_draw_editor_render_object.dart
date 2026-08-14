@@ -376,9 +376,10 @@ class FlowDrawEditorRenderBox extends RenderBox
 
   void paint(PaintingContext context, Offset offset) {
     final Stopwatch? sw = PaintProfiler.enabled ? (Stopwatch()..start()) : null;
-    if (PaintProfiler.enabled) _profStopwatch
-      ..reset()
-      ..start();
+    if (PaintProfiler.enabled)
+      _profStopwatch
+        ..reset()
+        ..start();
     _profRoutingUs = 0;
     _profObstaclesUs = 0;
     _profArrowCount = 0;
@@ -469,8 +470,10 @@ class FlowDrawEditorRenderBox extends RenderBox
   static const double _minLineScale = 0.7;
   double get lineScale => zoom >= _lineScaleZoom
       ? 1.0
-      : (_minLineScale +
-          (1.0 - _minLineScale) * (zoom / _lineScaleZoom)).clamp(_minLineScale, 1.0);
+      : (_minLineScale + (1.0 - _minLineScale) * (zoom / _lineScaleZoom)).clamp(
+          _minLineScale,
+          1.0,
+        );
 
   get drawingObjects => canvasState.drawingObjects;
 
@@ -486,10 +489,18 @@ class FlowDrawEditorRenderBox extends RenderBox
     const double maxScreenSpacing = 32.0;
     double spacingX = gridStyle.gridSpacingX;
     double spacingY = gridStyle.gridSpacingY;
-    while (spacingX * z < minScreenSpacing) { spacingX *= 2; }
-    while (spacingX * z > maxScreenSpacing) { spacingX /= 2; }
-    while (spacingY * z < minScreenSpacing) { spacingY *= 2; }
-    while (spacingY * z > maxScreenSpacing) { spacingY /= 2; }
+    while (spacingX * z < minScreenSpacing) {
+      spacingX *= 2;
+    }
+    while (spacingX * z > maxScreenSpacing) {
+      spacingX /= 2;
+    }
+    while (spacingY * z < minScreenSpacing) {
+      spacingY *= 2;
+    }
+    while (spacingY * z > maxScreenSpacing) {
+      spacingY /= 2;
+    }
 
     // Re-align start to the adjusted spacing
     final adjustedStartX = (viewport.left / spacingX).floor() * spacingX;
@@ -597,7 +608,8 @@ class FlowDrawEditorRenderBox extends RenderBox
     }
   }
 
-  double get dpr => WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+  double get dpr =>
+      WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
 
   static String _q(double v) => (v * 10).roundToDouble().toString();
 
@@ -648,24 +660,45 @@ class FlowDrawEditorRenderBox extends RenderBox
       if (r == null) {
         sb.write('-;');
       } else {
-        sb..write(q(r.left))..write(',')..write(q(r.top))..write(',')
-          ..write(q(r.width))..write(',')..write(q(r.height));
-        sb..write(',')..write(q(drawingObjects[id]?.angle ?? 0.0))..write(';');
+        sb
+          ..write(q(r.left))
+          ..write(',')
+          ..write(q(r.top))
+          ..write(',')
+          ..write(q(r.width))
+          ..write(',')
+          ..write(q(r.height));
+        sb
+          ..write(',')
+          ..write(q(drawingObjects[id]?.angle ?? 0.0))
+          ..write(';');
       }
     }
 
-    sb..write(q(o.start.dx))..write(',')..write(q(o.start.dy))..write(',')
-      ..write(q(o.end.dx))..write(',')..write(q(o.end.dy))..write(',')
-      ..write(o.pathType.index)..write(':');
+    sb
+      ..write(q(o.start.dx))
+      ..write(',')
+      ..write(q(o.start.dy))
+      ..write(',')
+      ..write(q(o.end.dx))
+      ..write(',')
+      ..write(q(o.end.dy))
+      ..write(',')
+      ..write(o.pathType.index)
+      ..write(':');
     final sa = o.startAttachment;
     final ea = o.endAttachment;
-    sb.write(sa == null
-        ? '-'
-        : '${sa.objectId},${q(sa.relativePosition.dx)},${q(sa.relativePosition.dy)}');
+    sb.write(
+      sa == null
+          ? '-'
+          : '${sa.objectId},${q(sa.relativePosition.dx)},${q(sa.relativePosition.dy)}',
+    );
     sb.write('/');
-    sb.write(ea == null
-        ? '-'
-        : '${ea.objectId},${q(ea.relativePosition.dx)},${q(ea.relativePosition.dy)}');
+    sb.write(
+      ea == null
+          ? '-'
+          : '${ea.objectId},${q(ea.relativePosition.dx)},${q(ea.relativePosition.dy)}',
+    );
     sb.write(':');
     attachedRect(sa?.objectId);
     attachedRect(ea?.objectId);
@@ -673,7 +706,9 @@ class FlowDrawEditorRenderBox extends RenderBox
     final eo = relOverrides['${o.id}:end'];
     if (so != null) sb.write('<s${q(so.dx)},${q(so.dy)}');
     if (eo != null) sb.write('<e${q(eo.dx)},${q(eo.dy)}');
-    sb..write('#')..write(obstacleSetKey);
+    sb
+      ..write('#')
+      ..write(obstacleSetKey);
     return sb.toString();
   }
 
@@ -689,7 +724,8 @@ class FlowDrawEditorRenderBox extends RenderBox
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0 * iz;
     final Paint selectedArrowPaint = Paint()
-      ..color = const Color(0xFF2196F3) // Same blue as connection port indicators
+      ..color =
+          const Color(0xFF2196F3) // Same blue as connection port indicators
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.0 * iz;
 
@@ -739,11 +775,16 @@ class FlowDrawEditorRenderBox extends RenderBox
     // (no compression — keeps the endpoint exactly where computed).
     Offset _sideRelativeRaw(int side, double t) {
       switch (side) {
-        case 0: return Offset(0.0, t); // left
-        case 1: return Offset(1.0, t); // right
-        case 2: return Offset(t, 0.0); // top
-        case 3: return Offset(t, 1.0); // bottom
-        default: return const Offset(0.5, 0.5);
+        case 0:
+          return Offset(0.0, t); // left
+        case 1:
+          return Offset(1.0, t); // right
+        case 2:
+          return Offset(t, 0.0); // top
+        case 3:
+          return Offset(t, 1.0); // bottom
+        default:
+          return const Offset(0.5, 0.5);
       }
     }
 
@@ -766,30 +807,24 @@ class FlowDrawEditorRenderBox extends RenderBox
       final peer = oppositeRect == null
           ? t
           : (side == 2 || side == 3
-              ? oppositeRect.center.dx
-              : oppositeRect.center.dy);
-      sideGroups
-          .putIfAbsent('${att.objectId}:$side', () => [])
-          .add(('$arrowId:$which', t, peer));
+                ? oppositeRect.center.dx
+                : oppositeRect.center.dy);
+      sideGroups.putIfAbsent('${att.objectId}:$side', () => []).add((
+        '$arrowId:$which',
+        t,
+        peer,
+      ));
     }
 
     for (final obj in drawingObjects.values) {
       if (obj is! ArrowObject) continue;
+      // Hand-routed ports stay exactly where the user put them.
+      if (obj.portsPinned) continue;
       if (obj.startAttachment != null) {
-        addEndpoint(
-          obj.id,
-          'start',
-          obj.startAttachment!,
-          obj.endAttachment,
-        );
+        addEndpoint(obj.id, 'start', obj.startAttachment!, obj.endAttachment);
       }
       if (obj.endAttachment != null) {
-        addEndpoint(
-          obj.id,
-          'end',
-          obj.endAttachment!,
-          obj.startAttachment,
-        );
+        addEndpoint(obj.id, 'end', obj.endAttachment!, obj.startAttachment);
       }
     }
 
@@ -800,10 +835,11 @@ class FlowDrawEditorRenderBox extends RenderBox
     const double minGap = 0.12; // min spacing along a side (fraction)
     for (final entry in sideGroups.entries) {
       final side = int.parse(entry.key.split(':').last);
-      final members = [...entry.value]..sort((a, b) {
-        final portOrder = a.$2.compareTo(b.$2);
-        return portOrder != 0 ? portOrder : a.$3.compareTo(b.$3);
-      });
+      final members = [...entry.value]
+        ..sort((a, b) {
+          final portOrder = a.$2.compareTo(b.$2);
+          return portOrder != 0 ? portOrder : a.$3.compareTo(b.$3);
+        });
       if (members.length < 2) continue;
 
       final adjusted = <double>[];
@@ -855,12 +891,18 @@ class FlowDrawEditorRenderBox extends RenderBox
     final Map<String, String> newArrowSignatures = {};
     for (final o in drawingObjects.values) {
       if (o is! ArrowObject) continue;
-      newArrowSignatures[o.id] =
-          _arrowSignature(o, relOverrides, obstacleSetKey, drawingObjects);
+      newArrowSignatures[o.id] = _arrowSignature(
+        o,
+        relOverrides,
+        obstacleSetKey,
+        drawingObjects,
+      );
     }
     // Drop cache entries for arrows that no longer exist.
     _routeCache.removeWhere((id, _) => !newArrowSignatures.containsKey(id));
-    _arrowSignatures.removeWhere((id, _) => !newArrowSignatures.containsKey(id));
+    _arrowSignatures.removeWhere(
+      (id, _) => !newArrowSignatures.containsKey(id),
+    );
 
     for (final obj in drawingObjects.values) {
       final isSelected = selectionState.selectedDrawingObjectIds.contains(
@@ -876,37 +918,66 @@ class FlowDrawEditorRenderBox extends RenderBox
 
         if (obj is FigureObject) {
           final paint = Paint()
-            ..color =
-            obj.isSelected ? Colors.blue : Colors.white.withOpacity(0.5)
+            ..color = obj.isSelected
+                ? Colors.blue
+                : Colors.white.withOpacity(0.5)
             ..style = PaintingStyle.stroke
-            ..strokeWidth = obj.isSelected ? 2.0 * clampedInverseZoom : 1.5 * clampedInverseZoom;
+            ..strokeWidth = obj.isSelected
+                ? 2.0 * clampedInverseZoom
+                : 1.5 * clampedInverseZoom;
           _paintDashedRect(canvas, obj.rect, paint);
           final textStyle = TextStyle(
-              color: paint.color,
-              fontSize: 14.0 / zoom,
-              fontWeight: FontWeight.bold);
+            color: paint.color,
+            fontSize: 14.0 / zoom,
+            fontWeight: FontWeight.bold,
+          );
           final textSpan = TextSpan(text: obj.label, style: textStyle);
-          final textPainter =
-          TextPainter(text: textSpan, textDirection: TextDirection.ltr)
-            ..layout();
+          final textPainter = TextPainter(
+            text: textSpan,
+            textDirection: TextDirection.ltr,
+          )..layout();
           textPainter.paint(
-              canvas, obj.rect.topLeft - Offset(0, textPainter.height));
+            canvas,
+            obj.rect.topLeft - Offset(0, textPainter.height),
+          );
         } else if (obj is TextObject) {
           if (!obj.isEditing) {
             obj.layoutPainter().paint(canvas, obj.rect.topLeft);
           }
         } else if (obj is CircleObject) {
-          final circleFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : noFillPaint;
-          final circleStroke = obj.strokeColor != null ? (Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth) : objectPaint;
+          final circleFill = obj.fillColor != null
+              ? (Paint()
+                  ..color = obj.fillColor!
+                  ..style = PaintingStyle.fill)
+              : noFillPaint;
+          final circleStroke = obj.strokeColor != null
+              ? (Paint()
+                  ..color = obj.strokeColor!
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = objectPaint.strokeWidth)
+              : objectPaint;
           canvas.drawOval(obj.rect, circleFill);
           if (obj.lineStyle == LineStyle.solid) {
             canvas.drawOval(obj.rect, circleStroke);
           } else {
             final ovalPath = Path()..addOval(obj.rect);
-            _paintStyledPath(canvas, ovalPath, circleStroke, obj.lineStyle, seed: obj.id.hashCode);
+            _paintStyledPath(
+              canvas,
+              ovalPath,
+              circleStroke,
+              obj.lineStyle,
+              seed: obj.id.hashCode,
+            );
           }
           if (obj.text != null && obj.text!.isNotEmpty && !obj.isEditing) {
-            _paintShapeText(canvas, obj.rect, obj.text!, obj.textStyle, obj.fontCustomized, obj.richText);
+            _paintShapeText(
+              canvas,
+              obj.rect,
+              obj.text!,
+              obj.textStyle,
+              obj.fontCustomized,
+              obj.richText,
+            );
           }
         } else if (obj is RectangleObject) {
           // Apple-style rounded superellipse (squircle) corners. Radius is a
@@ -916,65 +987,140 @@ class FlowDrawEditorRenderBox extends RenderBox
               ? obj.borderRadius
               : min(36.0 / zoom, _maxCornerRadiusWorld);
           final squircle = _squircleFor(obj.rect, objCornerRadius);
-          final rectFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : noFillPaint;
-          final rectStroke = obj.strokeColor != null ? (Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth) : objectPaint;
+          final rectFill = obj.fillColor != null
+              ? (Paint()
+                  ..color = obj.fillColor!
+                  ..style = PaintingStyle.fill)
+              : noFillPaint;
+          final rectStroke = obj.strokeColor != null
+              ? (Paint()
+                  ..color = obj.strokeColor!
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = objectPaint.strokeWidth)
+              : objectPaint;
           canvas.drawRSuperellipse(squircle, rectFill);
           if (obj.lineStyle == LineStyle.solid) {
             canvas.drawRSuperellipse(squircle, rectStroke);
           } else {
             final squirclePath = Path()..addRSuperellipse(squircle);
-            _paintStyledPath(canvas, squirclePath, rectStroke, obj.lineStyle, seed: obj.id.hashCode);
+            _paintStyledPath(
+              canvas,
+              squirclePath,
+              rectStroke,
+              obj.lineStyle,
+              seed: obj.id.hashCode,
+            );
           }
           if (obj.text != null && obj.text!.isNotEmpty && !obj.isEditing) {
-            _paintShapeText(canvas, obj.rect, obj.text!, obj.textStyle, obj.fontCustomized, obj.richText);
+            _paintShapeText(
+              canvas,
+              obj.rect,
+              obj.text!,
+              obj.textStyle,
+              obj.fontCustomized,
+              obj.richText,
+            );
           }
         } else if (obj is DiamondObject) {
           final diamondPath = obj.path;
-          final diaFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : noFillPaint;
-          final diaStroke = obj.strokeColor != null ? (Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth) : objectPaint;
+          final diaFill = obj.fillColor != null
+              ? (Paint()
+                  ..color = obj.fillColor!
+                  ..style = PaintingStyle.fill)
+              : noFillPaint;
+          final diaStroke = obj.strokeColor != null
+              ? (Paint()
+                  ..color = obj.strokeColor!
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = objectPaint.strokeWidth)
+              : objectPaint;
           canvas.drawPath(diamondPath, diaFill);
           if (obj.lineStyle == LineStyle.solid) {
             canvas.drawPath(diamondPath, diaStroke);
           } else {
-            _paintStyledPath(canvas, diamondPath, diaStroke, obj.lineStyle, seed: obj.id.hashCode);
+            _paintStyledPath(
+              canvas,
+              diamondPath,
+              diaStroke,
+              obj.lineStyle,
+              seed: obj.id.hashCode,
+            );
           }
           if (obj.text != null && obj.text!.isNotEmpty && !obj.isEditing) {
-            _paintShapeText(canvas, obj.rect, obj.text!, obj.textStyle, obj.fontCustomized, obj.richText);
+            _paintShapeText(
+              canvas,
+              obj.rect,
+              obj.text!,
+              obj.textStyle,
+              obj.fontCustomized,
+              obj.richText,
+            );
           }
         } else if (obj is ParallelogramObject) {
           final paraPath = obj.path;
-          final paraFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : noFillPaint;
-          final paraStroke = obj.strokeColor != null ? (Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth) : objectPaint;
+          final paraFill = obj.fillColor != null
+              ? (Paint()
+                  ..color = obj.fillColor!
+                  ..style = PaintingStyle.fill)
+              : noFillPaint;
+          final paraStroke = obj.strokeColor != null
+              ? (Paint()
+                  ..color = obj.strokeColor!
+                  ..style = PaintingStyle.stroke
+                  ..strokeWidth = objectPaint.strokeWidth)
+              : objectPaint;
           canvas.drawPath(paraPath, paraFill);
           if (obj.lineStyle == LineStyle.solid) {
             canvas.drawPath(paraPath, paraStroke);
           } else {
-            _paintStyledPath(canvas, paraPath, paraStroke, obj.lineStyle, seed: obj.id.hashCode);
+            _paintStyledPath(
+              canvas,
+              paraPath,
+              paraStroke,
+              obj.lineStyle,
+              seed: obj.id.hashCode,
+            );
           }
           if (obj.text != null && obj.text!.isNotEmpty && !obj.isEditing) {
-            _paintShapeText(canvas, obj.rect, obj.text!, obj.textStyle, obj.fontCustomized, obj.richText);
+            _paintShapeText(
+              canvas,
+              obj.rect,
+              obj.text!,
+              obj.textStyle,
+              obj.fontCustomized,
+              obj.richText,
+            );
           }
         } else if (obj is ForkJoinObject) {
           // Fork/join renders as a thick bar
-          final barFill = obj.fillColor != null ? (Paint()..color = obj.fillColor!..style = PaintingStyle.fill) : (Paint()..color = objectPaint.color..style = PaintingStyle.fill);
+          final barFill = obj.fillColor != null
+              ? (Paint()
+                  ..color = obj.fillColor!
+                  ..style = PaintingStyle.fill)
+              : (Paint()
+                  ..color = objectPaint.color
+                  ..style = PaintingStyle.fill);
           final barRect = RRect.fromRectAndRadius(
             obj.rect,
             const Radius.circular(3),
           );
           canvas.drawRRect(barRect, barFill);
           if (obj.strokeColor != null) {
-            final barStroke = Paint()..color = obj.strokeColor!..style = PaintingStyle.stroke..strokeWidth = objectPaint.strokeWidth;
+            final barStroke = Paint()
+              ..color = obj.strokeColor!
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = objectPaint.strokeWidth;
             canvas.drawRRect(barRect, barStroke);
           }
         } else if (obj is SvgObject) {
           canvas.save();
           canvas.translate(obj.rect.left, obj.rect.top);
           final Size svgSize = obj.pictureInfo.size;
-          final double scaleX = obj.rect.width /
-              (svgSize.width.isFinite && svgSize.width > 0
-                  ? svgSize.width
-                  : 1);
-          final double scaleY = obj.rect.height /
+          final double scaleX =
+              obj.rect.width /
+              (svgSize.width.isFinite && svgSize.width > 0 ? svgSize.width : 1);
+          final double scaleY =
+              obj.rect.height /
               (svgSize.height.isFinite && svgSize.height > 0
                   ? svgSize.height
                   : 1);
@@ -1002,9 +1148,15 @@ class FlowDrawEditorRenderBox extends RenderBox
           }
           // Rotation handle at topRight, offset away from the object
           final rotOffset = 8.0 / zoom;
-          final rotCorner = selectionRect.topRight + Offset(rotOffset, -rotOffset);
+          final rotCorner =
+              selectionRect.topRight + Offset(rotOffset, -rotOffset);
           canvas.drawCircle(rotCorner, handleHitAreaRadius, handleHitAreaPaint);
-          _paintRotationIcon(canvas, rotCorner, handlePaint, visibleHandleRadius);
+          _paintRotationIcon(
+            canvas,
+            rotCorner,
+            handlePaint,
+            visibleHandleRadius,
+          );
           if (_debugShowHitAreas) {
             for (final corner in resizeCorners) {
               _paintHitAreaDebug(canvas, corner, isEndpoint: false);
@@ -1012,7 +1164,8 @@ class FlowDrawEditorRenderBox extends RenderBox
             _paintHitAreaDebug(canvas, rotCorner, isEndpoint: false);
           }
 
-          if (selectionState.selectedDrawingObjectIds.length == 1 && (obj is RectangleObject || obj is CircleObject)) {
+          if (selectionState.selectedDrawingObjectIds.length == 1 &&
+              (obj is RectangleObject || obj is CircleObject)) {
             _paintQuickActionArrows(canvas, obj.rect, obj.id);
           }
         }
@@ -1020,8 +1173,11 @@ class FlowDrawEditorRenderBox extends RenderBox
         // Paint connection port indicators when the shape is selected or hovered
         final isHovered = selectionState.hoveredDrawingObjectId == obj.id;
         if ((isSelected || isHovered) &&
-            (obj is RectangleObject || obj is CircleObject || obj is DiamondObject ||
-             obj is ParallelogramObject || obj is ForkJoinObject)) {
+            (obj is RectangleObject ||
+                obj is CircleObject ||
+                obj is DiamondObject ||
+                obj is ParallelogramObject ||
+                obj is ForkJoinObject)) {
           _paintConnectionPortIndicators(canvas, obj);
         }
 
@@ -1030,8 +1186,8 @@ class FlowDrawEditorRenderBox extends RenderBox
       }
 
       if (obj is PencilStrokeObject) {
-        final paint =
-        Paint()..color = obj.isSelected ? Colors.blue : Colors.white;
+        final paint = Paint()
+          ..color = obj.isSelected ? Colors.blue : Colors.white;
         _paintPencilStroke(canvas, obj, paint);
 
         if (obj.isSelected) {
@@ -1061,13 +1217,13 @@ class FlowDrawEditorRenderBox extends RenderBox
         final paint = obj.isSelected
             ? selectedArrowPaint
             : (obj.strokeColor != null
-                ? (Paint()
-                  ..color = obj.strokeColor!
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = objectPaint.strokeWidth
-                  ..strokeCap = objectPaint.strokeCap
-                  ..strokeJoin = objectPaint.strokeJoin)
-                : objectPaint);
+                  ? (Paint()
+                      ..color = obj.strokeColor!
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = objectPaint.strokeWidth
+                      ..strokeCap = objectPaint.strokeCap
+                      ..strokeJoin = objectPaint.strokeJoin)
+                  : objectPaint);
         final pathType = obj.pathType;
         // Resolve attached object rects
         Rect? startObjRect;
@@ -1078,7 +1234,7 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (startAttachment != null) {
           final targetNode = canvasState.nodes[startAttachment.objectId];
           final targetObject =
-          canvasState.drawingObjects[startAttachment.objectId];
+              canvasState.drawingObjects[startAttachment.objectId];
           startObjRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
@@ -1087,7 +1243,7 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (endAttachment != null) {
           final targetNode = canvasState.nodes[endAttachment.objectId];
           final targetObject =
-          canvasState.drawingObjects[endAttachment.objectId];
+              canvasState.drawingObjects[endAttachment.objectId];
           endObjRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
@@ -1099,34 +1255,50 @@ class FlowDrawEditorRenderBox extends RenderBox
 
         // Resolve endpoints from relativePosition (always respect stored attachments)
         if (startObjRect != null && startAttachment != null) {
-          final relPos = relOverrides['${obj.id}:start'] ?? startAttachment.relativePosition;
-          start = startObjRect.topLeft +
-              Offset(startObjRect.width * relPos.dx, startObjRect.height * relPos.dy);
+          final relPos =
+              relOverrides['${obj.id}:start'] ??
+              startAttachment.relativePosition;
+          start =
+              startObjRect.topLeft +
+              Offset(
+                startObjRect.width * relPos.dx,
+                startObjRect.height * relPos.dy,
+              );
           // Snap to rotated edge if the attached object is meaningfully rotated
           final startObj = canvasState.drawingObjects[startAttachment.objectId];
           if (startObj != null && startObj.angle.abs() > 0.05) {
             start = _snapToRotatedEdge(
-                _rotatePoint(start, startObjRect.center, startObj.angle),
-                startObjRect, startObj.angle);
+              _rotatePoint(start, startObjRect.center, startObj.angle),
+              startObjRect,
+              startObj.angle,
+            );
           }
         }
         if (endObjRect != null && endAttachment != null) {
-          final relPos = relOverrides['${obj.id}:end'] ?? endAttachment.relativePosition;
-          end = endObjRect.topLeft +
-              Offset(endObjRect.width * relPos.dx, endObjRect.height * relPos.dy);
+          final relPos =
+              relOverrides['${obj.id}:end'] ?? endAttachment.relativePosition;
+          end =
+              endObjRect.topLeft +
+              Offset(
+                endObjRect.width * relPos.dx,
+                endObjRect.height * relPos.dy,
+              );
           // Snap to rotated edge if the attached object is meaningfully rotated
           final endObj = canvasState.drawingObjects[endAttachment.objectId];
           if (endObj != null && endObj.angle.abs() > 0.05) {
             end = _snapToRotatedEdge(
-                _rotatePoint(end, endObjRect.center, endObj.angle),
-                endObjRect, endObj.angle);
+              _rotatePoint(end, endObjRect.center, endObj.angle),
+              endObjRect,
+              endObj.angle,
+            );
           }
         }
 
         // Check if attached objects are meaningfully rotated (> ~1 degree)
         const rotationThreshold = 0.05; // ~2.9 degrees
         final startObjAngle = startAttachment != null
-            ? (canvasState.drawingObjects[startAttachment.objectId]?.angle ?? 0.0)
+            ? (canvasState.drawingObjects[startAttachment.objectId]?.angle ??
+                  0.0)
             : 0.0;
         final endObjAngle = endAttachment != null
             ? (canvasState.drawingObjects[endAttachment.objectId]?.angle ?? 0.0)
@@ -1151,80 +1323,90 @@ class FlowDrawEditorRenderBox extends RenderBox
             }
             obj.renderedPath = pts;
           } else {
-          // Snap start/end to nearest object edge, but skip for rotated
-          // objects — the rotated point is already on the correct visual edge.
-          if (startObjRect != null && !startIsRotated) {
-            start = _snapToNearestEdge(start, startObjRect);
-          }
-          if (endObjRect != null && !endIsRotated) {
-            end = _snapToNearestEdge(end, endObjRect);
-          }
+            // Snap start/end to nearest object edge, but skip for rotated
+            // objects — the rotated point is already on the correct visual edge.
+            if (startObjRect != null && !startIsRotated) {
+              start = _snapToNearestEdge(start, startObjRect);
+            }
+            if (endObjRect != null && !endIsRotated) {
+              end = _snapToNearestEdge(end, endObjRect);
+            }
 
-          // Collect obstacles, excluding source/target objects — the router
-          // handles them separately via startObjectRect/endObjectRect
-          final int _obstStart =
-              PaintProfiler.enabled ? _profStopwatch.elapsedMicroseconds : 0;
-          final startAttachId = obj.startAttachment?.objectId;
-          final endAttachId = obj.endAttachment?.objectId;
-          final obstacles = <Rect>[];
-          for (final o in canvasState.drawingObjects.values) {
-            if (o.id == obj.id) continue;
-            if (o.id == startAttachId || o.id == endAttachId) continue;
-            if (o is ArrowObject || o is LineObject || o is PencilStrokeObject) continue;
-            obstacles.add(o.rect);
-          }
-          for (final node in canvasState.nodes.values) {
-            if (node.id == startAttachId || node.id == endAttachId) continue;
-            final bounds = getNodeBoundsInWorld(node);
-            if (bounds != null) obstacles.add(bounds);
-          }
-          if (PaintProfiler.enabled) {
-            _profObstaclesUs +=
-                _profStopwatch.elapsedMicroseconds - _obstStart;
-          }
+            // Collect obstacles, excluding source/target objects — the router
+            // handles them separately via startObjectRect/endObjectRect
+            final int _obstStart = PaintProfiler.enabled
+                ? _profStopwatch.elapsedMicroseconds
+                : 0;
+            final startAttachId = obj.startAttachment?.objectId;
+            final endAttachId = obj.endAttachment?.objectId;
+            final obstacles = <Rect>[];
+            for (final o in canvasState.drawingObjects.values) {
+              if (o.id == obj.id) continue;
+              if (o.id == startAttachId || o.id == endAttachId) continue;
+              if (o is ArrowObject ||
+                  o is LineObject ||
+                  o is PencilStrokeObject)
+                continue;
+              obstacles.add(o.rect);
+            }
+            for (final node in canvasState.nodes.values) {
+              if (node.id == startAttachId || node.id == endAttachId) continue;
+              final bounds = getNodeBoundsInWorld(node);
+              if (bounds != null) obstacles.add(bounds);
+            }
+            if (PaintProfiler.enabled) {
+              _profObstaclesUs +=
+                  _profStopwatch.elapsedMicroseconds - _obstStart;
+            }
 
-          final dpr = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
-          // For rotated objects, pass the rotated bounding box so the router
-          // still provides proper padding and curved entry stubs.
-          final routerStartRect = startIsRotated && startObjRect != null
-              ? _rotatedBoundingBox(startObjRect, startObjAngle)
-              : startObjRect;
-          final routerEndRect = endIsRotated && endObjRect != null
-              ? _rotatedBoundingBox(endObjRect, endObjAngle)
-              : endObjRect;
-          final int _routeStart =
-              PaintProfiler.enabled ? _profStopwatch.elapsedMicroseconds : 0;
-          waypoints = OrthogonalRouter.route(
-            start: start,
-            end: end,
-            obstacles: obstacles,
-            startObjectRect: routerStartRect,
-            endObjectRect: routerEndRect,
-            devicePixelRatio: dpr,
-            zoom: canvasState.viewportZoom,
-            existingSegments: routedSegments,
-          );
-          if (PaintProfiler.enabled) {
-            _profRoutingUs +=
-                _profStopwatch.elapsedMicroseconds - _routeStart;
-            _profRouteCalls++;
-            _profArrowCount++;
-          }
+            final dpr = WidgetsBinding
+                .instance
+                .platformDispatcher
+                .views
+                .first
+                .devicePixelRatio;
+            // For rotated objects, pass the rotated bounding box so the router
+            // still provides proper padding and curved entry stubs.
+            final routerStartRect = startIsRotated && startObjRect != null
+                ? _rotatedBoundingBox(startObjRect, startObjAngle)
+                : startObjRect;
+            final routerEndRect = endIsRotated && endObjRect != null
+                ? _rotatedBoundingBox(endObjRect, endObjAngle)
+                : endObjRect;
+            final int _routeStart = PaintProfiler.enabled
+                ? _profStopwatch.elapsedMicroseconds
+                : 0;
+            waypoints = OrthogonalRouter.route(
+              start: start,
+              end: end,
+              obstacles: obstacles,
+              startObjectRect: routerStartRect,
+              endObjectRect: routerEndRect,
+              devicePixelRatio: dpr,
+              zoom: canvasState.viewportZoom,
+              existingSegments: routedSegments,
+            );
+            if (PaintProfiler.enabled) {
+              _profRoutingUs +=
+                  _profStopwatch.elapsedMicroseconds - _routeStart;
+              _profRouteCalls++;
+              _profArrowCount++;
+            }
 
-          // Record this path's segments so subsequent arrows route around it.
-          final pts = <Offset>[start, ...?waypoints, end];
-          for (int i = 0; i < pts.length - 1; i++) {
-            routedSegments.add((pts[i], pts[i + 1]));
-          }
-          // Cache the exact polyline being drawn so hit-testing measures
-          // against the visible line (the router result here differs from a
-          // naive re-route, which previously caused taps to select the wrong
-          // edge).
-          obj.renderedPath = pts;
-          // Store the routed geometry + signature so subsequent frames that
-          // don't change THIS arrow's inputs reuse it.
-          _routeCache[obj.id] = _RoutedArrow(start, end, waypoints);
-          _arrowSignatures[obj.id] = newArrowSignatures[obj.id]!;
+            // Record this path's segments so subsequent arrows route around it.
+            final pts = <Offset>[start, ...?waypoints, end];
+            for (int i = 0; i < pts.length - 1; i++) {
+              routedSegments.add((pts[i], pts[i + 1]));
+            }
+            // Cache the exact polyline being drawn so hit-testing measures
+            // against the visible line (the router result here differs from a
+            // naive re-route, which previously caused taps to select the wrong
+            // edge).
+            obj.renderedPath = pts;
+            // Store the routed geometry + signature so subsequent frames that
+            // don't change THIS arrow's inputs reuse it.
+            _routeCache[obj.id] = _RoutedArrow(start, end, waypoints);
+            _arrowSignatures[obj.id] = newArrowSignatures[obj.id]!;
           } // end route-cache miss branch
         } else {
           obj.renderedPath = null;
@@ -1260,7 +1442,9 @@ class FlowDrawEditorRenderBox extends RenderBox
               }
             }
           }
-          arrowControl ??= ((end - start).distanceSquared > 1e-6) ? start : null;
+          arrowControl ??= ((end - start).distanceSquared > 1e-6)
+              ? start
+              : null;
           if (arrowControl != null && obj.endAttachment != null) {
             final dir = (end - arrowControl);
             final len = dir.distance;
@@ -1281,10 +1465,26 @@ class FlowDrawEditorRenderBox extends RenderBox
         // Draw the line/path with shortened end
         if (pathType == LinkPathType.orthogonal) {
           if (obj.lineStyle == LineStyle.solid) {
-            _paintOrthogonalPath(canvas, start, lineEnd, paint, waypoints: waypoints);
+            _paintOrthogonalPath(
+              canvas,
+              start,
+              lineEnd,
+              paint,
+              waypoints: waypoints,
+            );
           } else {
-            final orthoPath = _buildOrthogonalPath(start, lineEnd, waypoints: waypoints);
-            _paintStyledPath(canvas, orthoPath, paint, obj.lineStyle, seed: obj.id.hashCode);
+            final orthoPath = _buildOrthogonalPath(
+              start,
+              lineEnd,
+              waypoints: waypoints,
+            );
+            _paintStyledPath(
+              canvas,
+              orthoPath,
+              paint,
+              obj.lineStyle,
+              seed: obj.id.hashCode,
+            );
           }
         } else {
           final path = Path()
@@ -1295,7 +1495,13 @@ class FlowDrawEditorRenderBox extends RenderBox
               lineEnd.dx,
               lineEnd.dy,
             );
-          _paintStyledPath(canvas, path, paint, obj.lineStyle, seed: obj.id.hashCode);
+          _paintStyledPath(
+            canvas,
+            path,
+            paint,
+            obj.lineStyle,
+            seed: obj.id.hashCode,
+          );
         }
 
         // Draw the arrowhead at the shortened end — unless this is an
@@ -1303,10 +1509,22 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (obj.arrowHead != ArrowHeadType.none) {
           if (pathType == LinkPathType.orthogonal) {
             if (arrowControl != null) {
-              _paintArrowHead(canvas, arrowControl, lineEnd, paint, lineStyle: obj.lineStyle);
+              _paintArrowHead(
+                canvas,
+                arrowControl,
+                lineEnd,
+                paint,
+                lineStyle: obj.lineStyle,
+              );
             }
           } else {
-            _paintArrowHead(canvas, controlPoint, lineEnd, paint, lineStyle: obj.lineStyle);
+            _paintArrowHead(
+              canvas,
+              controlPoint,
+              lineEnd,
+              paint,
+              lineStyle: obj.lineStyle,
+            );
           }
         }
 
@@ -1320,8 +1538,8 @@ class FlowDrawEditorRenderBox extends RenderBox
             final startOutward = startObjRect != null
                 ? start - startObjRect.center
                 : (waypoints != null && waypoints.isNotEmpty
-                    ? waypoints.first - start
-                    : end - start);
+                      ? waypoints.first - start
+                      : end - start);
             _paintHalfDot(canvas, start, dotRadius, startOutward, dotPaint);
           }
           if (obj.endAttachment != null) {
@@ -1338,7 +1556,10 @@ class FlowDrawEditorRenderBox extends RenderBox
               ..style = PaintingStyle.stroke
               ..strokeWidth = 2.0 * clampedInverseZoom;
             canvas.drawCircle(
-                sel.isStart ? start : end, dotRadius * 2.0, ringPaint);
+              sel.isStart ? start : end,
+              dotRadius * 2.0,
+              ringPaint,
+            );
           }
         }
 
@@ -1346,15 +1567,16 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (obj.arrowLabel != null && obj.arrowLabel!.isNotEmpty) {
           final labelText = obj.arrowLabel!;
           final labelFontSize = 12.0 / zoom;
-          final labelParagraphBuilder = ui.ParagraphBuilder(
-            ui.ParagraphStyle(
-              textAlign: TextAlign.center,
-              fontSize: labelFontSize,
-              fontFamily: 'sans-serif',
-            ),
-          )
-            ..pushStyle(ui.TextStyle(color: const Color(0xFFE0E0E0)))
-            ..addText(labelText);
+          final labelParagraphBuilder =
+              ui.ParagraphBuilder(
+                  ui.ParagraphStyle(
+                    textAlign: TextAlign.center,
+                    fontSize: labelFontSize,
+                    fontFamily: 'sans-serif',
+                  ),
+                )
+                ..pushStyle(ui.TextStyle(color: const Color(0xFFE0E0E0)))
+                ..addText(labelText);
           final labelParagraph = labelParagraphBuilder.build();
           labelParagraph.layout(ui.ParagraphConstraints(width: 200.0 / zoom));
 
@@ -1427,13 +1649,17 @@ class FlowDrawEditorRenderBox extends RenderBox
 
           // For orthogonal arrows with waypoints, only show start/end handles
           final List<Offset> handles;
-          if (pathType == LinkPathType.orthogonal && waypoints != null && waypoints.isNotEmpty) {
+          if (pathType == LinkPathType.orthogonal &&
+              waypoints != null &&
+              waypoints.isNotEmpty) {
             handles = [start, end];
           } else {
             handles = [
               start,
               end,
-              pathType == LinkPathType.orthogonal ? cornerPoint : onCurveMidPoint,
+              pathType == LinkPathType.orthogonal
+                  ? cornerPoint
+                  : onCurveMidPoint,
             ];
           }
           for (final handlePos in handles) {
@@ -1461,13 +1687,13 @@ class FlowDrawEditorRenderBox extends RenderBox
         final paint = obj.isSelected
             ? selectedArrowPaint
             : (obj.strokeColor != null
-                ? (Paint()
-                  ..color = obj.strokeColor!
-                  ..style = PaintingStyle.stroke
-                  ..strokeWidth = objectPaint.strokeWidth
-                  ..strokeCap = objectPaint.strokeCap
-                  ..strokeJoin = objectPaint.strokeJoin)
-                : objectPaint);
+                  ? (Paint()
+                      ..color = obj.strokeColor!
+                      ..style = PaintingStyle.stroke
+                      ..strokeWidth = objectPaint.strokeWidth
+                      ..strokeCap = objectPaint.strokeCap
+                      ..strokeJoin = objectPaint.strokeJoin)
+                  : objectPaint);
 
         Offset? startNodeCenter;
         Offset? endNodeCenter;
@@ -1477,7 +1703,7 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (startAttachment != null) {
           final targetNode = canvasState.nodes[startAttachment.objectId];
           final targetObject =
-          canvasState.drawingObjects[startAttachment.objectId];
+              canvasState.drawingObjects[startAttachment.objectId];
           final Rect? targetRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
@@ -1485,16 +1711,20 @@ class FlowDrawEditorRenderBox extends RenderBox
 
           if (targetRect != null) {
             final relPos = startAttachment.relativePosition;
-            start = targetRect.topLeft +
+            start =
+                targetRect.topLeft +
                 Offset(
                   targetRect.width * relPos.dx,
                   targetRect.height * relPos.dy,
                 );
-            final startObj = canvasState.drawingObjects[startAttachment.objectId];
+            final startObj =
+                canvasState.drawingObjects[startAttachment.objectId];
             if (startObj != null && startObj.angle.abs() > 0.05) {
               start = _snapToRotatedEdge(
-                  _rotatePoint(start, targetRect.center, startObj.angle),
-                  targetRect, startObj.angle);
+                _rotatePoint(start, targetRect.center, startObj.angle),
+                targetRect,
+                startObj.angle,
+              );
             }
           }
         }
@@ -1504,7 +1734,7 @@ class FlowDrawEditorRenderBox extends RenderBox
         if (endAttachment != null) {
           final targetNode = canvasState.nodes[endAttachment.objectId];
           final targetObject =
-          canvasState.drawingObjects[endAttachment.objectId];
+              canvasState.drawingObjects[endAttachment.objectId];
           final Rect? targetRect = targetNode != null
               ? getNodeBoundsInWorld(targetNode)
               : targetObject?.rect;
@@ -1512,7 +1742,8 @@ class FlowDrawEditorRenderBox extends RenderBox
 
           if (targetRect != null) {
             final relPos = endAttachment.relativePosition;
-            end = targetRect.topLeft +
+            end =
+                targetRect.topLeft +
                 Offset(
                   targetRect.width * relPos.dx,
                   targetRect.height * relPos.dy,
@@ -1520,8 +1751,10 @@ class FlowDrawEditorRenderBox extends RenderBox
             final endObj = canvasState.drawingObjects[endAttachment.objectId];
             if (endObj != null && endObj.angle.abs() > 0.05) {
               end = _snapToRotatedEdge(
-                  _rotatePoint(end, targetRect.center, endObj.angle),
-                  targetRect, endObj.angle);
+                _rotatePoint(end, targetRect.center, endObj.angle),
+                targetRect,
+                endObj.angle,
+              );
             }
           }
         }
@@ -1533,7 +1766,13 @@ class FlowDrawEditorRenderBox extends RenderBox
         final mid = obj.midPoint ?? (start + end) / 2;
         path.quadraticBezierTo(mid.dx, mid.dy, end.dx, end.dy);
 
-        _paintStyledPath(canvas, path, paint, obj.lineStyle, seed: obj.id.hashCode);
+        _paintStyledPath(
+          canvas,
+          path,
+          paint,
+          obj.lineStyle,
+          seed: obj.id.hashCode,
+        );
 
         // Draw connection point dots at attached endpoints
         {
@@ -1596,9 +1835,10 @@ class FlowDrawEditorRenderBox extends RenderBox
     const double endpointRadiusFactor = 1.6;
     final double radius =
         (isEndpoint ? baseHitRadius * endpointRadiusFactor : baseHitRadius) /
-            zoom;
-    final Color color =
-        isEndpoint ? const Color(0xFF2196F3) : const Color(0xFFFF9800);
+        zoom;
+    final Color color = isEndpoint
+        ? const Color(0xFF2196F3)
+        : const Color(0xFFFF9800);
 
     canvas.drawCircle(
       center,
@@ -1643,7 +1883,8 @@ class FlowDrawEditorRenderBox extends RenderBox
       ..color = Colors.white
       ..style = PaintingStyle.fill;
     final Paint portBorderPaint = Paint()
-      ..color = const Color(0xFF2196F3) // Blue
+      ..color =
+          const Color(0xFF2196F3) // Blue
       ..style = PaintingStyle.stroke
       ..strokeWidth = borderWidth;
 
@@ -1673,25 +1914,42 @@ class FlowDrawEditorRenderBox extends RenderBox
     final edgeApproachFromLeft = <String, List<bool>>{};
     for (final obj in canvasState.drawingObjects.values) {
       if (obj is ArrowObject || obj is LineObject) {
-        final startAtt = obj is ArrowObject ? obj.startAttachment : (obj as LineObject).startAttachment;
-        final endAtt = obj is ArrowObject ? obj.endAttachment : (obj as LineObject).endAttachment;
+        final startAtt = obj is ArrowObject
+            ? obj.startAttachment
+            : (obj as LineObject).startAttachment;
+        final endAtt = obj is ArrowObject
+            ? obj.endAttachment
+            : (obj as LineObject).endAttachment;
         final otherEnd = obj is ArrowObject ? obj.end : (obj as LineObject).end;
-        final otherStart = obj is ArrowObject ? obj.start : (obj as LineObject).start;
-        for (final (att, otherPoint) in [(startAtt, otherEnd), (endAtt, otherStart)]) {
+        final otherStart = obj is ArrowObject
+            ? obj.start
+            : (obj as LineObject).start;
+        for (final (att, otherPoint) in [
+          (startAtt, otherEnd),
+          (endAtt, otherStart),
+        ]) {
           if (att != null && att.objectId == objectId) {
             final rp = att.relativePosition;
             if (rp.dy < 0.25) {
               // Top edge: does the connector go left or right?
-              (edgeApproachFromLeft['top'] ??= []).add(otherPoint.dx < rect.center.dx);
+              (edgeApproachFromLeft['top'] ??= []).add(
+                otherPoint.dx < rect.center.dx,
+              );
             }
             if (rp.dy > 0.75) {
-              (edgeApproachFromLeft['bottom'] ??= []).add(otherPoint.dx < rect.center.dx);
+              (edgeApproachFromLeft['bottom'] ??= []).add(
+                otherPoint.dx < rect.center.dx,
+              );
             }
             if (rp.dx < 0.25) {
-              (edgeApproachFromLeft['left'] ??= []).add(otherPoint.dy < rect.center.dy);
+              (edgeApproachFromLeft['left'] ??= []).add(
+                otherPoint.dy < rect.center.dy,
+              );
             }
             if (rp.dx > 0.75) {
-              (edgeApproachFromLeft['right'] ??= []).add(otherPoint.dy < rect.center.dy);
+              (edgeApproachFromLeft['right'] ??= []).add(
+                otherPoint.dy < rect.center.dy,
+              );
             }
           }
         }
@@ -1705,7 +1963,8 @@ class FlowDrawEditorRenderBox extends RenderBox
       final approaches = edgeApproachFromLeft[edge];
       if (approaches == null) return Offset.zero;
       // If connector approaches from the left/top, move icon to the right/bottom
-      final mostlyFromLeft = approaches.where((b) => b).length >= approaches.length / 2;
+      final mostlyFromLeft =
+          approaches.where((b) => b).length >= approaches.length / 2;
       switch (edge) {
         case 'top':
         case 'bottom':
@@ -1721,16 +1980,29 @@ class FlowDrawEditorRenderBox extends RenderBox
     }
 
     final positions = {
-      'top': rect.topCenter - Offset(0, spacing + halfHandle) + _edgeOffset('top'),
-      'right': rect.centerRight + Offset(spacing + halfHandle, 0) + _edgeOffset('right'),
-      'bottom': rect.bottomCenter + Offset(0, spacing + halfHandle) + _edgeOffset('bottom'),
-      'left': rect.centerLeft - Offset(spacing + halfHandle, 0) + _edgeOffset('left'),
+      'top':
+          rect.topCenter - Offset(0, spacing + halfHandle) + _edgeOffset('top'),
+      'right':
+          rect.centerRight +
+          Offset(spacing + halfHandle, 0) +
+          _edgeOffset('right'),
+      'bottom':
+          rect.bottomCenter +
+          Offset(0, spacing + halfHandle) +
+          _edgeOffset('bottom'),
+      'left':
+          rect.centerLeft -
+          Offset(spacing + halfHandle, 0) +
+          _edgeOffset('left'),
     };
 
     for (var entry in positions.entries) {
       final center = entry.value;
-      final handleRect =
-      Rect.fromCenter(center: center, width: handleSize, height: handleSize);
+      final handleRect = Rect.fromCenter(
+        center: center,
+        width: handleSize,
+        height: handleSize,
+      );
       canvas.drawOval(handleRect, handlePaint);
 
       final Path arrowPath = Path();
@@ -1812,10 +2084,19 @@ class FlowDrawEditorRenderBox extends RenderBox
   }
 
   /// Paints a quick-action style icon (blue oval + white arrow) for rotation.
-  void _paintRotationIcon(Canvas canvas, Offset center, Paint paint, double radius) {
+  void _paintRotationIcon(
+    Canvas canvas,
+    Offset center,
+    Paint paint,
+    double radius,
+  ) {
     final double handleSize = 20.0 * clampedInverseZoom;
 
-    final handleRect = Rect.fromCenter(center: center, width: handleSize, height: handleSize);
+    final handleRect = Rect.fromCenter(
+      center: center,
+      width: handleSize,
+      height: handleSize,
+    );
     final handlePaint = Paint()..color = Colors.blue.withOpacity(0.8);
     canvas.drawOval(handleRect, handlePaint);
 
@@ -1890,7 +2171,14 @@ class FlowDrawEditorRenderBox extends RenderBox
   }
 
   /// Paints centered text inside a shape's rect.
-  void _paintShapeText(Canvas canvas, Rect shapeRect, String text, TextStyle? style, bool fontCustomized, [List<TextRun>? runs]) {
+  void _paintShapeText(
+    Canvas canvas,
+    Rect shapeRect,
+    String text,
+    TextStyle? style,
+    bool fontCustomized, [
+    List<TextRun>? runs,
+  ]) {
     final resolvedStyle = effectiveShapeTextStyle(
       style: style,
       customized: fontCustomized,
@@ -1986,7 +2274,12 @@ class FlowDrawEditorRenderBox extends RenderBox
     final distToRight = (point.dx - rect.right).abs();
     final distToTop = (point.dy - rect.top).abs();
     final distToBottom = (point.dy - rect.bottom).abs();
-    final minDist = [distToLeft, distToRight, distToTop, distToBottom].reduce(min);
+    final minDist = [
+      distToLeft,
+      distToRight,
+      distToTop,
+      distToBottom,
+    ].reduce(min);
     if (minDist == distToLeft) return Offset(rect.left, point.dy);
     if (minDist == distToRight) return Offset(rect.right, point.dy);
     if (minDist == distToTop) return Offset(point.dx, rect.top);
@@ -2077,7 +2370,13 @@ class FlowDrawEditorRenderBox extends RenderBox
   /// Draws a [path] on [canvas] according to the given [lineStyle].
   /// For solid, draws normally. For rough, roughens the path first then draws.
   /// For dashed/dotted, uses the corresponding utility.
-  void _paintStyledPath(Canvas canvas, Path path, Paint paint, LineStyle lineStyle, {int seed = 0}) {
+  void _paintStyledPath(
+    Canvas canvas,
+    Path path,
+    Paint paint,
+    LineStyle lineStyle, {
+    int seed = 0,
+  }) {
     switch (lineStyle) {
       case LineStyle.solid:
         canvas.drawPath(path, paint);
@@ -2135,7 +2434,8 @@ class FlowDrawEditorRenderBox extends RenderBox
     Paint paint, {
     LineStyle lineStyle = LineStyle.solid,
   }) {
-    final dpr = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    final dpr =
+        WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
     // Arrowheads are constant in screen pixels at normal/zoomed-in levels
     // (factor = 1/zoom). But when zoomed OUT past [headConstantZoom], we cap the
     // factor so the head size stops growing in world units — i.e. it shrinks on
@@ -2189,7 +2489,11 @@ class FlowDrawEditorRenderBox extends RenderBox
     return RSuperellipse.fromRectAndRadius(rect, Radius.circular(max(0, r)));
   }
 
-  Path _buildOrthogonalPath(Offset start, Offset end, {List<Offset>? waypoints}) {
+  Path _buildOrthogonalPath(
+    Offset start,
+    Offset end, {
+    List<Offset>? waypoints,
+  }) {
     final allPoints = [start, ...?waypoints, end];
 
     if (allPoints.length == 2) {
@@ -2228,8 +2532,14 @@ class FlowDrawEditorRenderBox extends RenderBox
         continue;
       }
 
-      final dirIn = Offset((curr.dx - prev.dx) / segPrev, (curr.dy - prev.dy) / segPrev);
-      final dirOut = Offset((next.dx - curr.dx) / segNext, (next.dy - curr.dy) / segNext);
+      final dirIn = Offset(
+        (curr.dx - prev.dx) / segPrev,
+        (curr.dy - prev.dy) / segPrev,
+      );
+      final dirOut = Offset(
+        (next.dx - curr.dx) / segNext,
+        (next.dy - curr.dy) / segNext,
+      );
       final cross = dirIn.dx * dirOut.dy - dirIn.dy * dirOut.dx;
       if (cross.abs() < 0.01) {
         path.lineTo(curr.dx, curr.dy);
@@ -2250,23 +2560,38 @@ class FlowDrawEditorRenderBox extends RenderBox
   /// rounded-superellipse — matching the squircle node corners. [r] is the
   /// (already-clamped) corner radius; the curve spans 1.1·r out along each
   /// segment so the smoothing reads as continuous rather than a tight arc.
-  static void _addSquircleCorner(Path path, Offset corner, double r,
-      Offset dirIn, Offset dirOut) {
+  static void _addSquircleCorner(
+    Path path,
+    Offset corner,
+    double r,
+    Offset dirIn,
+    Offset dirOut,
+  ) {
     // Tangent points one radius out along each segment. r is already clamped to
     // half the shorter adjacent segment by the caller, so this never overshoots
     // into a neighbouring corner. The squircle character comes from the cubic's
     // control-point bias, not from over-extending the tangents.
     final ext = r;
-    final start = Offset(corner.dx - dirIn.dx * ext, corner.dy - dirIn.dy * ext);
-    final end = Offset(corner.dx + dirOut.dx * ext, corner.dy + dirOut.dy * ext);
+    final start = Offset(
+      corner.dx - dirIn.dx * ext,
+      corner.dy - dirIn.dy * ext,
+    );
+    final end = Offset(
+      corner.dx + dirOut.dx * ext,
+      corner.dy + dirOut.dy * ext,
+    );
     path.lineTo(start.dx, start.dy);
     // Control points biased toward the corner vertex (k≈0.83) approximate the
     // superellipse profile better than the circular k=0.5523.
     const k = 0.83;
-    final c1 = Offset(start.dx + (corner.dx - start.dx) * k,
-        start.dy + (corner.dy - start.dy) * k);
-    final c2 = Offset(end.dx + (corner.dx - end.dx) * k,
-        end.dy + (corner.dy - end.dy) * k);
+    final c1 = Offset(
+      start.dx + (corner.dx - start.dx) * k,
+      start.dy + (corner.dy - start.dy) * k,
+    );
+    final c2 = Offset(
+      end.dx + (corner.dx - end.dx) * k,
+      end.dy + (corner.dy - end.dy) * k,
+    );
     path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, end.dx, end.dy);
   }
 
@@ -2404,7 +2729,13 @@ class FlowDrawEditorRenderBox extends RenderBox
         break;
       case EditorTool.arrowTopRight:
         if (tempDrawingObject!.pathType == LinkPathType.orthogonal) {
-          _paintOrthogonalPath(canvas, start, end, tempPaint, waypoints: tempDrawingObject!.waypoints);
+          _paintOrthogonalPath(
+            canvas,
+            start,
+            end,
+            tempPaint,
+            waypoints: tempDrawingObject!.waypoints,
+          );
         } else {
           canvas.drawLine(start, end, tempPaint);
         }
