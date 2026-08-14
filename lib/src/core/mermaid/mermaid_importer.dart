@@ -29,8 +29,9 @@ class MermaidImporter {
     int startLine = 0;
     for (int i = 0; i < lines.length; i++) {
       final line = lines[i];
-      final headerMatch =
-          RegExp(r'^(?:flowchart|graph)\s+(TD|TB|LR|BT|RL)\s*$').firstMatch(line);
+      final headerMatch = RegExp(
+        r'^(?:flowchart|graph)\s+(TD|TB|LR|BT|RL)\s*$',
+      ).firstMatch(line);
       if (headerMatch != null) {
         direction = headerMatch.group(1)!;
         if (direction == 'TB') direction = 'TD';
@@ -62,12 +63,13 @@ class MermaidImporter {
         r'^subgraph\s+(?:"([^"]*)"|(\w+)\s*\[\s*"?([^"\]]*)"?\s*\]|([^\[]+?))\s*$',
       ).firstMatch(line);
       if (subMatch != null) {
-        final title = (subMatch.group(1) ??
-                subMatch.group(3) ??
-                subMatch.group(4) ??
-                subMatch.group(2) ??
-                '')
-            .trim();
+        final title =
+            (subMatch.group(1) ??
+                    subMatch.group(3) ??
+                    subMatch.group(4) ??
+                    subMatch.group(2) ??
+                    '')
+                .trim();
         final sg = _MermaidSubgraph(title);
         subgraphs.add(sg);
         openSubgraphs.add(sg);
@@ -81,8 +83,9 @@ class MermaidImporter {
       }
 
       // Styling/class/click directives we don't model — skip quietly.
-      if (RegExp(r'^(style|classDef|class|click|linkStyle|direction)\b')
-          .hasMatch(line)) {
+      if (RegExp(
+        r'^(style|classDef|class|click|linkStyle|direction)\b',
+      ).hasMatch(line)) {
         continue;
       }
 
@@ -129,7 +132,8 @@ class MermaidImporter {
     List<_MermaidSubgraph> openSubgraphs,
   ) {
     // Shape suffix that may follow a node id inline.
-    const shape = r'(?:\[/[^\]]*/\]|\[\[[^\]]*\]\]|\[[^\]]*\]|'
+    const shape =
+        r'(?:\[/[^\]]*/\]|\[\[[^\]]*\]\]|\[[^\]]*\]|'
         r'\(\([^)]*\)\)|\(\[[^\]]*\]\)|\([^)]*\)|\{[^}]*\}|>[^\]]*\])';
     // Connector: dashes/dots/equals, optional arrowhead.
     const connector = r'(-\.+->|-\.+-|=+>|=+|-+>|-+)';
@@ -199,7 +203,11 @@ class MermaidImporter {
       final match = re.firstMatch(line);
       if (match != null) {
         final label = (match.group(1) ?? '').trim();
-        nodes[nodeId] = _MermaidNode(nodeId, label.isEmpty ? nodeId : label, type);
+        nodes[nodeId] = _MermaidNode(
+          nodeId,
+          label.isEmpty ? nodeId : label,
+          type,
+        );
         if (openSubgraphs.isNotEmpty) openSubgraphs.last.memberIds.add(nodeId);
         return;
       }
@@ -350,7 +358,10 @@ class MermaidImporter {
     // Kahn's algorithm with declaration-order tie-breaking.
     final rank = List<int>.filled(k, 0);
     final indeg = List<int>.from(cIndeg);
-    final ready = <int>[for (int i = 0; i < k; i++) if (indeg[i] == 0) i];
+    final ready = <int>[
+      for (int i = 0; i < k; i++)
+        if (indeg[i] == 0) i,
+    ];
     int placed = 0, r = 0;
     final seen = <int>{};
     while (ready.isNotEmpty) {
@@ -409,8 +420,7 @@ class MermaidImporter {
     // placed neighbours so connected members line up.
     final memberOrder = <int, List<String>>{};
     for (int c = 0; c < k; c++) {
-      memberOrder[c] =
-          subgraphs[c].memberIds.where(nodes.containsKey).toList();
+      memberOrder[c] = subgraphs[c].memberIds.where(nodes.containsKey).toList();
     }
 
     // Cross-axis position (center) assigned per node as we place ranks.
@@ -446,8 +456,9 @@ class MermaidImporter {
 
           final ba = bary(a), bb = bary(b);
           if (ba == bb) {
-            return memberOrder[c]!.indexOf(a).compareTo(
-                memberOrder[c]!.indexOf(b));
+            return memberOrder[c]!
+                .indexOf(a)
+                .compareTo(memberOrder[c]!.indexOf(b));
           }
           return ba.compareTo(bb);
         });
@@ -584,21 +595,31 @@ class MermaidImporter {
 
   static void _calculateNodeSize(_MermaidNode node) {
     TextPainter measure(double maxWidth) => TextPainter(
-          text: TextSpan(
-            text: node.label,
-            style: const TextStyle(fontSize: 14),
-          ),
-          textDirection: TextDirection.ltr,
-          textAlign: TextAlign.center,
-        )..layout(maxWidth: maxWidth);
+      text: TextSpan(text: node.label, style: const TextStyle(fontSize: 14)),
+      textDirection: TextDirection.ltr,
+      textAlign: TextAlign.center,
+    )..layout(maxWidth: maxWidth);
 
     // Measure unconstrained first; only wrap (and grow the box) once the label
     // exceeds the max width. This keeps short labels compact while letting long
     // ones widen up to the cap instead of overflowing a too-narrow box.
+    // A diamond's usable interior is half its bounding box (a label rect of
+    // w×h fits the rhombus only when w/W + h/H ≤ 1), so diamonds wrap at half
+    // the cap and take a box twice the label's extent.
+    final diamond = node.type == 'diamond';
+    final wrapWidth = (_maxNodeWidth - _nodePaddingH * 2) / (diamond ? 2 : 1);
     final natural = measure(double.infinity);
-    final painter = natural.width + _nodePaddingH * 2 <= _maxNodeWidth
-        ? natural
-        : measure(_maxNodeWidth - _nodePaddingH * 2);
+    final painter = natural.width <= wrapWidth ? natural : measure(wrapWidth);
+
+    if (diamond) {
+      final width = max(
+        _minNodeWidth,
+        min(_maxNodeWidth, (painter.width + _nodePaddingH) * 2),
+      );
+      final height = max(_minNodeHeight, (painter.height + _nodePaddingV) * 2);
+      node.rect = Rect.fromLTWH(0, 0, width, height);
+      return;
+    }
 
     final width = max(
       _minNodeWidth,
@@ -695,11 +716,16 @@ class MermaidImporter {
             barycenters[u] = -1.0;
           } else {
             barycenters[u] =
-                parentNodes.map((p) => nodePositions[p]!).fold<int>(0, (a, b) => a + b) / parentNodes.length;
+                parentNodes
+                    .map((p) => nodePositions[p]!)
+                    .fold<int>(0, (a, b) => a + b) /
+                parentNodes.length;
           }
         }
         layers[i]!.sort((a, b) => barycenters[a]!.compareTo(barycenters[b]!));
-        for (int j = 0; j < layers[i]!.length; j++) { nodePositions[layers[i]![j]] = j; }
+        for (int j = 0; j < layers[i]!.length; j++) {
+          nodePositions[layers[i]![j]] = j;
+        }
       }
       for (int i = layers.length - 2; i >= 0; i--) {
         final barycenters = <String, double>{};
@@ -709,11 +735,16 @@ class MermaidImporter {
             barycenters[u] = -1.0;
           } else {
             barycenters[u] =
-                childrenNodes.map((c) => nodePositions[c]!).fold<int>(0, (a, b) => a + b) / childrenNodes.length;
+                childrenNodes
+                    .map((c) => nodePositions[c]!)
+                    .fold<int>(0, (a, b) => a + b) /
+                childrenNodes.length;
           }
         }
         layers[i]!.sort((a, b) => barycenters[a]!.compareTo(barycenters[b]!));
-        for (int j = 0; j < layers[i]!.length; j++) { nodePositions[layers[i]![j]] = j; }
+        for (int j = 0; j < layers[i]!.length; j++) {
+          nodePositions[layers[i]![j]] = j;
+        }
       }
     }
   }
@@ -793,11 +824,19 @@ class MermaidImporter {
         maxFlow = max(maxFlow, flowExtent(node));
         if (horizontalFlow) {
           node.rect = Rect.fromLTWH(
-            flowPos, crossPos, node.rect.width, node.rect.height);
+            flowPos,
+            crossPos,
+            node.rect.width,
+            node.rect.height,
+          );
           crossPos += node.rect.height + crossSpacing;
         } else {
           node.rect = Rect.fromLTWH(
-            crossPos, flowPos, node.rect.width, node.rect.height);
+            crossPos,
+            flowPos,
+            node.rect.width,
+            node.rect.height,
+          );
           crossPos += node.rect.width + crossSpacing;
         }
       }
@@ -838,11 +877,16 @@ class MermaidImporter {
     // Keep ports away from corners: clamp t to [0.15, 0.85].
     final s = 0.15 + t * 0.70;
     switch (side) {
-      case 0: return Offset(0.0, s);  // left edge, varying y
-      case 1: return Offset(1.0, s);  // right edge, varying y
-      case 2: return Offset(s, 0.0);  // top edge, varying x
-      case 3: return Offset(s, 1.0);  // bottom edge, varying x
-      default: return Offset(0.5, 0.5);
+      case 0:
+        return Offset(0.0, s); // left edge, varying y
+      case 1:
+        return Offset(1.0, s); // right edge, varying y
+      case 2:
+        return Offset(s, 0.0); // top edge, varying x
+      case 3:
+        return Offset(s, 1.0); // bottom edge, varying x
+      default:
+        return Offset(0.5, 0.5);
     }
   }
 
@@ -862,15 +906,17 @@ class MermaidImporter {
       final container = _subgraphBounds(sg, nodes);
       if (container == null) continue;
 
-      drawingObjects.add(RectangleObject(
-        id: uuid.v4(),
-        rect: container,
-        text: sg.title,
-        borderRadius: 12.0,
-        fillColor: const Color(0x110A84FF),
-        strokeColor: const Color(0xFF8AB4F8),
-        lineStyle: LineStyle.dashed,
-      ).toJson());
+      drawingObjects.add(
+        RectangleObject(
+          id: uuid.v4(),
+          rect: container,
+          text: sg.title,
+          borderRadius: 12.0,
+          fillColor: const Color(0x110A84FF),
+          strokeColor: const Color(0xFF8AB4F8),
+          lineStyle: LineStyle.dashed,
+        ).toJson(),
+      );
     }
 
     // Generate UUIDs for each mermaid node.
@@ -887,7 +933,9 @@ class MermaidImporter {
     // How many ports fit on a side of a node (at least 1).
     int capacity(String nodeId, int side) {
       final node = nodes[nodeId]!;
-      final edgeLen = (side == 0 || side == 1) ? node.rect.height : node.rect.width;
+      final edgeLen = (side == 0 || side == 1)
+          ? node.rect.height
+          : node.rect.width;
       // usable 70% of edge (matching [0.15, 0.85] range)
       return max(1, (edgeLen * 0.70 / minPortGap).floor());
     }
@@ -895,13 +943,13 @@ class MermaidImporter {
     // Desired side per edge endpoint: key='nodeId:edgeIdx', value=preferred side
     // We first assign each endpoint to its natural side, then overflow.
     final startSide = List<int>.filled(edges.length, 0);
-    final endSide   = List<int>.filled(edges.length, 0);
+    final endSide = List<int>.filled(edges.length, 0);
 
     for (int i = 0; i < edges.length; i++) {
       final fromNode = nodes[edges[i].from]!;
-      final toNode   = nodes[edges[i].to]!;
+      final toNode = nodes[edges[i].to]!;
       startSide[i] = _exitSide(fromNode.rect, toNode.rect);
-      endSide[i]   = _exitSide(toNode.rect, fromNode.rect);
+      endSide[i] = _exitSide(toNode.rect, fromNode.rect);
     }
 
     // Count usage per (nodeId, side).
@@ -942,35 +990,42 @@ class MermaidImporter {
     }
 
     final startNodeIds = edges.map((e) => e.from).toList();
-    final endNodeIds   = edges.map((e) => e.to).toList();
+    final endNodeIds = edges.map((e) => e.to).toList();
     assignWithCapacity(startSide, startNodeIds);
-    assignWithCapacity(endSide,   endNodeIds);
+    assignWithCapacity(endSide, endNodeIds);
 
     // Group by (nodeId, side) and assign evenly-spaced t values
     final startRel = List<Offset?>.filled(edges.length, null);
-    final endRel   = List<Offset?>.filled(edges.length, null);
+    final endRel = List<Offset?>.filled(edges.length, null);
 
     // Build slot groups
     final startGroups = <String, List<int>>{}; // 'nodeId:side' -> [edgeIdx]
-    final endGroups   = <String, List<int>>{};
+    final endGroups = <String, List<int>>{};
     for (int i = 0; i < edges.length; i++) {
-      startGroups.putIfAbsent('${edges[i].from}:${startSide[i]}', () => []).add(i);
+      startGroups
+          .putIfAbsent('${edges[i].from}:${startSide[i]}', () => [])
+          .add(i);
       endGroups.putIfAbsent('${edges[i].to}:${endSide[i]}', () => []).add(i);
     }
 
     void distributeGroup(Map<String, List<int>> groups, List<Offset?> relList) {
       groups.forEach((key, indices) {
-        final side = int.parse(key.split(':').last);
+        final parts = key.split(':');
+        final side = int.parse(parts.last);
+        // A diamond touches its bounding box only at the side midpoints, so
+        // spreading ports along a side would leave arrows floating off the
+        // slanted edge. Pin every diamond port to the vertex instead.
+        final diamond = nodes[parts.first]?.type == 'diamond';
         final n = indices.length;
         for (int j = 0; j < n; j++) {
-          final t = n == 1 ? 0.5 : j / (n - 1).toDouble();
+          final t = diamond || n == 1 ? 0.5 : j / (n - 1).toDouble();
           relList[indices[j]] = _sideToRelative(side, t);
         }
       });
     }
 
     distributeGroup(startGroups, startRel);
-    distributeGroup(endGroups,   endRel);
+    distributeGroup(endGroups, endRel);
 
     // Create shape objects
     for (final node in nodes.values) {
@@ -978,13 +1033,25 @@ class MermaidImporter {
       final rect = node.rect;
 
       if (node.type == 'circle') {
-        drawingObjects.add(CircleObject(id: objectId, rect: rect, text: node.label).toJson());
+        drawingObjects.add(
+          CircleObject(id: objectId, rect: rect, text: node.label).toJson(),
+        );
       } else if (node.type == 'diamond') {
-        drawingObjects.add(DiamondObject(id: objectId, rect: rect, text: node.label).toJson());
+        drawingObjects.add(
+          DiamondObject(id: objectId, rect: rect, text: node.label).toJson(),
+        );
       } else if (node.type == 'parallelogram') {
-        drawingObjects.add(ParallelogramObject(id: objectId, rect: rect, text: node.label).toJson());
+        drawingObjects.add(
+          ParallelogramObject(
+            id: objectId,
+            rect: rect,
+            text: node.label,
+          ).toJson(),
+        );
       } else {
-        drawingObjects.add(RectangleObject(id: objectId, rect: rect, text: node.label).toJson());
+        drawingObjects.add(
+          RectangleObject(id: objectId, rect: rect, text: node.label).toJson(),
+        );
       }
     }
 
@@ -992,54 +1059,65 @@ class MermaidImporter {
     for (int i = 0; i < edges.length; i++) {
       final edge = edges[i];
       final fromUuid = uuidMap[edge.from]!;
-      final toUuid   = uuidMap[edge.to]!;
+      final toUuid = uuidMap[edge.to]!;
       final fromNode = nodes[edge.from]!;
-      final toNode   = nodes[edge.to]!;
+      final toNode = nodes[edge.to]!;
 
       final sRel = startRel[i] ?? const Offset(0.5, 1.0);
-      final eRel = endRel[i]   ?? const Offset(0.5, 0.0);
+      final eRel = endRel[i] ?? const Offset(0.5, 0.0);
 
       // Convert relative position to world position for start/end coords
-      final start = fromNode.rect.topLeft + Offset(
-        fromNode.rect.width  * sRel.dx,
-        fromNode.rect.height * sRel.dy,
-      );
-      final end = toNode.rect.topLeft + Offset(
-        toNode.rect.width  * eRel.dx,
-        toNode.rect.height * eRel.dy,
-      );
+      final start =
+          fromNode.rect.topLeft +
+          Offset(fromNode.rect.width * sRel.dx, fromNode.rect.height * sRel.dy);
+      final end =
+          toNode.rect.topLeft +
+          Offset(toNode.rect.width * eRel.dx, toNode.rect.height * eRel.dy);
 
-      final startAttachment = ObjectAttachment(objectId: fromUuid, relativePosition: sRel);
-      final endAttachment   = ObjectAttachment(objectId: toUuid,   relativePosition: eRel);
+      final startAttachment = ObjectAttachment(
+        objectId: fromUuid,
+        relativePosition: sRel,
+      );
+      final endAttachment = ObjectAttachment(
+        objectId: toUuid,
+        relativePosition: eRel,
+      );
 
       final lineStyle = edge.dashed ? LineStyle.dashed : LineStyle.solid;
 
       final edgeId = uuid.v4();
       if (edge.type == 'arrow') {
-        drawingObjects.add(ArrowObject(
-          id: edgeId,
-          start: start,
-          end: end,
-          startAttachment: startAttachment,
-          endAttachment: endAttachment,
-          arrowLabel: edge.label,
-          pathType: LinkPathType.orthogonal,
-          lineStyle: lineStyle,
-        ).toJson());
+        drawingObjects.add(
+          ArrowObject(
+            id: edgeId,
+            start: start,
+            end: end,
+            startAttachment: startAttachment,
+            endAttachment: endAttachment,
+            arrowLabel: edge.label,
+            pathType: LinkPathType.orthogonal,
+            lineStyle: lineStyle,
+          ).toJson(),
+        );
       } else {
-        drawingObjects.add(LineObject(
-          id: edgeId,
-          start: start,
-          end: end,
-          startAttachment: startAttachment,
-          endAttachment: endAttachment,
-          lineStyle: lineStyle,
-        ).toJson());
+        drawingObjects.add(
+          LineObject(
+            id: edgeId,
+            start: start,
+            end: end,
+            startAttachment: startAttachment,
+            endAttachment: endAttachment,
+            lineStyle: lineStyle,
+          ).toJson(),
+        );
       }
     }
 
     return {
-      'viewport': {'offset': [0.0, 0.0], 'zoom': 1.0},
+      'viewport': {
+        'offset': [0.0, 0.0],
+        'zoom': 1.0,
+      },
       'nodes': <Map<String, dynamic>>[],
       'drawingObjects': drawingObjects,
     };
