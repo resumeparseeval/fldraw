@@ -1052,18 +1052,35 @@ class OrthogonalRouter {
     required List<(Offset, Offset)> existing,
   }) {
     if (existing.isEmpty || hi <= lo) return mid;
+    // Sibling edges leaving the same port run down the same column no matter
+    // which lane is chosen — that shared stretch is not a reason to move off
+    // the midpoint. Only segments that don't touch our endpoints count.
+    bool touches(Offset p, (Offset, Offset) seg) {
+      final along = seg.$2 - seg.$1;
+      final toPoint = p - seg.$1;
+      final cross = along.dx * toPoint.dy - along.dy * toPoint.dx;
+      if (cross.abs() > 1e-6) return false;
+      final dot = toPoint.dx * along.dx + toPoint.dy * along.dy;
+      return dot >= -1e-6 && dot <= along.distanceSquared + 1e-6;
+    }
+
+    final others = [
+      for (final seg in existing)
+        if (!touches(start, seg) && !touches(end, seg)) seg,
+    ];
+    if (others.isEmpty) return mid;
     const crossingWeight = 1000.0;
     double cost(double lane) {
       final a = vertical ? Offset(start.dx, lane) : Offset(lane, start.dy);
       final b = vertical ? Offset(end.dx, lane) : Offset(lane, end.dy);
       final overlap =
-          _overlapLength(start, a, existing) +
-          _overlapLength(a, b, existing) +
-          _overlapLength(b, end, existing);
+          _overlapLength(start, a, others) +
+          _overlapLength(a, b, others) +
+          _overlapLength(b, end, others);
       final crossings =
-          _crossingCount(start, a, existing) +
-          _crossingCount(a, b, existing) +
-          _crossingCount(b, end, existing);
+          _crossingCount(start, a, others) +
+          _crossingCount(a, b, others) +
+          _crossingCount(b, end, others);
       return overlap + crossings * crossingWeight;
     }
 
