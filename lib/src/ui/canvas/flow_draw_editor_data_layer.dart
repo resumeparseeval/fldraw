@@ -38,6 +38,13 @@ typedef SnapPoint = ({
   Offset relativePosition,
 });
 
+@visibleForTesting
+Offset viewportResizeCompensation(Size previous, Size next, double zoom) =>
+    Offset(
+      (previous.width - next.width) / 2 / zoom,
+      (previous.height - next.height) / 2 / zoom,
+    );
+
 /// What the "Swap" action will do given the current selection.
 enum _SwapKind { none, nodes, endpoints }
 
@@ -4322,10 +4329,7 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // The canvas centers the world at (size.width/2, size.height/2).
     // When size shrinks, the center moves left/up, making content appear to
     // drift right/down. Compensate by shifting the viewport offset.
-    final delta = Offset(
-      (newSize.width - prev.width) / 2 / zoom,
-      (newSize.height - prev.height) / 2 / zoom,
-    );
+    final delta = viewportResizeCompensation(prev, newSize, zoom);
     _canvasBloc.add(CanvasPanned(delta));
   }
 
