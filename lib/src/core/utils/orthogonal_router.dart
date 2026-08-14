@@ -51,21 +51,26 @@ class OrthogonalRouter {
     // ── Phase 1: Setup ──────────────────────────────────────────────────
     // Use all obstacles — no distance-based truncation. The search area
     // still filters to relevant ones, but we inflate generously.
-    final searchArea = Rect.fromPoints(start, end).inflate(
-      max(600.0, (end - start).distance * 1.5),
-    );
+    final searchArea = Rect.fromPoints(
+      start,
+      end,
+    ).inflate(max(600.0, (end - start).distance * 1.5));
     final relevant = obstacles.where((r) => searchArea.overlaps(r)).toList();
 
     final inflated = relevant.map((r) => r.inflate(_padding)).toList();
 
     // Add source/target as routing obstacles (inflated).
-    if (startObjectRect != null) inflated.add(startObjectRect.inflate(_padding));
+    if (startObjectRect != null) {
+      inflated.add(startObjectRect.inflate(_padding));
+    }
     if (endObjectRect != null) inflated.add(endObjectRect.inflate(_padding));
 
     // Inner obstacles: actual shapes with tiny inflation so the path doesn't
     // pass through objects but stubs can still exit cleanly.
     final innerInflated = relevant.map((r) => r.inflate(2.0)).toList();
-    if (startObjectRect != null) innerInflated.add(startObjectRect.inflate(2.0));
+    if (startObjectRect != null) {
+      innerInflated.add(startObjectRect.inflate(2.0));
+    }
     if (endObjectRect != null) innerInflated.add(endObjectRect.inflate(2.0));
 
     // Effective stub distance (world-space). Kept at the flat baseline — the
@@ -76,12 +81,22 @@ class OrthogonalRouter {
 
     // Compute exit/entry stubs.
     var exitStub = startObjectRect != null
-        ? _computeExitStub(start, startObjectRect,
-            _excludeRect(relevant, inflated, startObjectRect), end, stubDistance)
+        ? _computeExitStub(
+            start,
+            startObjectRect,
+            _excludeRect(relevant, inflated, startObjectRect),
+            end,
+            stubDistance,
+          )
         : null;
     var entryStub = endObjectRect != null
-        ? _computeExitStub(end, endObjectRect,
-            _excludeRect(relevant, inflated, endObjectRect), start, stubDistance)
+        ? _computeExitStub(
+            end,
+            endObjectRect,
+            _excludeRect(relevant, inflated, endObjectRect),
+            start,
+            stubDistance,
+          )
         : null;
 
     // Tight facing-edge gap: when the source's exit and the target's entry leave
@@ -114,13 +129,21 @@ class OrthogonalRouter {
       // around instead.
       const minSharedGap = 12.0;
       if (exitH && entryH && exitDir.dx.sign != entryDir.dx.sign) {
+        // Positive when there is a real gap; source may be on either side.
         final innerGap = sr.right < er.left
-            ? er.left - sr.right // source on the left
+            ? er.left - sr.right
             : (er.right < sr.left ? sr.left - er.right : -1.0);
         if (innerGap > minSharedGap && innerGap < stubDistance * 2) {
-          final mid = sr.right < er.left
-              ? (sr.right + er.left) / 2
-              : (er.right + sr.left) / 2;
+          final lo = (sr.right < er.left ? sr.right : er.right);
+          final mid = _clearSharedLane(
+            lo + innerGap / 2,
+            lo + minSharedGap / 2,
+            lo + innerGap - minSharedGap / 2,
+            start,
+            end,
+            vertical: false,
+            existing: existingSegments,
+          );
           exitStub = Offset(mid, start.dy);
           entryStub = Offset(mid, end.dy);
         }
@@ -130,15 +153,23 @@ class OrthogonalRouter {
         // top/bottom edges face opposite ways but aren't stacked — putting the
         // corridor through the node bodies.)
         final hOverlap = min(sr.right, er.right) - max(sr.left, er.left);
+        // Positive when there is a real gap; source may be above or below.
         final innerGap = sr.bottom < er.top
-            ? er.top - sr.bottom // source above
+            ? er.top - sr.bottom
             : (er.bottom < sr.top ? sr.top - er.bottom : -1.0);
         if (hOverlap > 0 &&
             innerGap > minSharedGap &&
             innerGap < stubDistance * 2) {
-          final mid = sr.bottom < er.top
-              ? (sr.bottom + er.top) / 2
-              : (er.bottom + sr.top) / 2;
+          final lo = (sr.bottom < er.top ? sr.bottom : er.bottom);
+          final mid = _clearSharedLane(
+            lo + innerGap / 2,
+            lo + minSharedGap / 2,
+            lo + innerGap - minSharedGap / 2,
+            start,
+            end,
+            vertical: true,
+            existing: existingSegments,
+          );
           exitStub = Offset(start.dx, mid);
           entryStub = Offset(end.dx, mid);
         }
@@ -153,13 +184,24 @@ class OrthogonalRouter {
     if (_isAxisAligned(routeStart, routeEnd) &&
         !_segmentHitsAny(routeStart, routeEnd, innerInflated) &&
         _overlapLength(routeStart, routeEnd, existingSegments) < 1.0) {
-      return _assemble(start, exitStub, const [], entryStub, end, innerInflated);
+      return _assemble(
+        start,
+        exitStub,
+        const [],
+        entryStub,
+        end,
+        innerInflated,
+      );
     }
 
     // L-corner — pick the option with less existing-segment overlap.
-    final lCorner = _findClearLCorner(routeStart, routeEnd, innerInflated,
-        exitDir: exitStub != null ? routeStart - start : null,
-        existingSegments: existingSegments);
+    final lCorner = _findClearLCorner(
+      routeStart,
+      routeEnd,
+      innerInflated,
+      exitDir: exitStub != null ? routeStart - start : null,
+      existingSegments: existingSegments,
+    );
     if (lCorner != null) {
       final inner = lCorner == routeStart ? const <Offset>[] : [lCorner];
       return _assemble(start, exitStub, inner, entryStub, end, innerInflated);
@@ -168,13 +210,22 @@ class OrthogonalRouter {
     // ── Phase 3: U-turn detection ───────────────────────────────────────
     if (exitStub != null && _isUTurn(start, exitStub, end)) {
       final inner = _buildUTurnWaypoints(
-          routeStart, routeEnd, exitStub - start, startObjectRect, endObjectRect);
+        routeStart,
+        routeEnd,
+        exitStub - start,
+        startObjectRect,
+        endObjectRect,
+      );
       return _assemble(start, exitStub, inner, entryStub, end, innerInflated);
     }
 
     // ── Phase 4: Visibility graph + A* ──────────────────────────────────
-    final candidates =
-        _generateCandidates(routeStart, routeEnd, inflated, innerInflated);
+    final candidates = _generateCandidates(
+      routeStart,
+      routeEnd,
+      inflated,
+      innerInflated,
+    );
     final astarPath = _astar(
       routeStart,
       routeEnd,
@@ -189,7 +240,9 @@ class OrthogonalRouter {
   // ── Public: Smart attachment points ─────────────────────────────────────
 
   static (Offset, Offset) computeSmartAttachmentPoints(
-      Rect sourceRect, Rect targetRect) {
+    Rect sourceRect,
+    Rect targetRect,
+  ) {
     final sc = sourceRect.center;
     final tc = targetRect.center;
 
@@ -204,8 +257,7 @@ class OrthogonalRouter {
         horizontalGapRight > -_padding || horizontalGapLeft > -_padding;
 
     if (hasVerticalGap &&
-        (!hasHorizontalGap ||
-            (tc.dy - sc.dy).abs() >= (tc.dx - sc.dx).abs())) {
+        (!hasHorizontalGap || (tc.dy - sc.dy).abs() >= (tc.dx - sc.dx).abs())) {
       if (tc.dy > sc.dy) {
         return (sourceRect.bottomCenter, targetRect.topCenter);
       } else {
@@ -238,10 +290,13 @@ class OrthogonalRouter {
 
   // ── Exit stub computation ───────────────────────────────────────────────
 
-  static Offset _computeExitStub(Offset point, Rect objectRect,
-      [List<Rect> obstacles = const [],
-      Offset? target,
-      double stubDistance = _stubDistance]) {
+  static Offset _computeExitStub(
+    Offset point,
+    Rect objectRect, [
+    List<Rect> obstacles = const [],
+    Offset? target,
+    double stubDistance = _stubDistance,
+  ]) {
     final exits = <Offset>[
       Offset(objectRect.left - stubDistance, point.dy), // left
       Offset(objectRect.right + stubDistance, point.dy), // right
@@ -249,8 +304,9 @@ class OrthogonalRouter {
       Offset(point.dx, objectRect.bottom + stubDistance), // bottom
     ];
 
-    bool isClear(Offset p) => !obstacles.any((r) =>
-        p.dx > r.left && p.dx < r.right && p.dy > r.top && p.dy < r.bottom);
+    bool isClear(Offset p) => !obstacles.any(
+      (r) => p.dx > r.left && p.dx < r.right && p.dy > r.top && p.dy < r.bottom,
+    );
 
     // If the point lies clearly on exactly one edge, that edge is the true
     // attachment side: the connector MUST leave/enter perpendicular to it. Lock
@@ -261,21 +317,16 @@ class OrthogonalRouter {
     final onEdge = _soleEdge(point, objectRect);
     if (onEdge != null) {
       Offset stubAt(double d) => switch (onEdge) {
-            0 => Offset(objectRect.left - d, point.dy),
-            1 => Offset(objectRect.right + d, point.dy),
-            2 => Offset(point.dx, objectRect.top - d),
-            _ => Offset(point.dx, objectRect.bottom + d),
-          };
+        0 => Offset(objectRect.left - d, point.dy),
+        1 => Offset(objectRect.right + d, point.dy),
+        2 => Offset(point.dx, objectRect.top - d),
+        _ => Offset(point.dx, objectRect.bottom + d),
+      };
       // Always stand the connector OFF the node by a visible clearance before
       // it turns in. Prefer the full stub; if crowded, step inward to the
       // largest still-clear clearance down to a visible floor.
       if (isClear(exits[onEdge])) return exits[onEdge];
-      for (final d in [
-        stubDistance * 0.6,
-        stubDistance * 0.4,
-        16.0,
-        10.0,
-      ]) {
+      for (final d in [stubDistance * 0.6, stubDistance * 0.4, 16.0, 10.0]) {
         if (isClear(stubAt(d))) return stubAt(d);
       }
       return exits[onEdge]; // full clearance; corridor detours to reach it
@@ -284,8 +335,9 @@ class OrthogonalRouter {
     final natural = _naturalExitIndex(point, objectRect, target);
     if (isClear(exits[natural])) return exits[natural];
 
-    double score(Offset p) =>
-        target == null ? 0 : (p.dx - target.dx).abs() + (p.dy - target.dy).abs();
+    double score(Offset p) => target == null
+        ? 0
+        : (p.dx - target.dx).abs() + (p.dy - target.dy).abs();
 
     final sorted = List.generate(4, (i) => i)
       ..sort((a, b) => score(exits[a]).compareTo(score(exits[b])));
@@ -316,7 +368,8 @@ class OrthogonalRouter {
     final onRight = (point.dx - rect.right).abs() < tol;
     final onTop = (point.dy - rect.top).abs() < tol;
     final onBottom = (point.dy - rect.bottom).abs() < tol;
-    final count = (onLeft ? 1 : 0) +
+    final count =
+        (onLeft ? 1 : 0) +
         (onRight ? 1 : 0) +
         (onTop ? 1 : 0) +
         (onBottom ? 1 : 0);
@@ -407,8 +460,13 @@ class OrthogonalRouter {
     return false;
   }
 
-  static List<Offset> _buildUTurnWaypoints(Offset routeStart, Offset routeEnd,
-      Offset exitDir, Rect? startRect, Rect? endRect) {
+  static List<Offset> _buildUTurnWaypoints(
+    Offset routeStart,
+    Offset routeEnd,
+    Offset exitDir,
+    Rect? startRect,
+    Rect? endRect,
+  ) {
     final clearance = _padding + 5;
     final isHoriz = exitDir.dx.abs() > exitDir.dy.abs();
 
@@ -429,10 +487,7 @@ class OrthogonalRouter {
             ? max(detourY, edge + clearance)
             : min(detourY, edge - clearance);
       }
-      return [
-        Offset(routeStart.dx, detourY),
-        Offset(routeEnd.dx, detourY),
-      ];
+      return [Offset(routeStart.dx, detourY), Offset(routeEnd.dx, detourY)];
     } else {
       final detourSign = (routeEnd.dx - routeStart.dx).abs() > 0.5
           ? (routeEnd.dx - routeStart.dx).sign
@@ -450,10 +505,7 @@ class OrthogonalRouter {
             ? max(detourX, edge + clearance)
             : min(detourX, edge - clearance);
       }
-      return [
-        Offset(detourX, routeStart.dy),
-        Offset(detourX, routeEnd.dy),
-      ];
+      return [Offset(detourX, routeStart.dy), Offset(detourX, routeEnd.dy)];
     }
   }
 
@@ -472,9 +524,11 @@ class OrthogonalRouter {
 
     final corner1 = Offset(end.dx, start.dy); // horizontal-first
     final corner2 = Offset(start.dx, end.dy); // vertical-first
-    final c1Clear = !_segmentHitsAny(start, corner1, obstacles) &&
+    final c1Clear =
+        !_segmentHitsAny(start, corner1, obstacles) &&
         !_segmentHitsAny(corner1, end, obstacles);
-    final c2Clear = !_segmentHitsAny(start, corner2, obstacles) &&
+    final c2Clear =
+        !_segmentHitsAny(start, corner2, obstacles) &&
         !_segmentHitsAny(corner2, end, obstacles);
 
     if (!c1Clear && !c2Clear) return null;
@@ -523,13 +577,21 @@ class OrthogonalRouter {
   // ── Visibility graph + A* ───────────────────────────────────────────────
 
   static List<Offset> _generateCandidates(
-      Offset start, Offset end, List<Rect> candidateRects, List<Rect> collisionRects) {
+    Offset start,
+    Offset end,
+    List<Rect> candidateRects,
+    List<Rect> collisionRects,
+  ) {
     final candidates = <Offset>{};
 
     // Corners of inflated obstacles.
     for (final rect in candidateRects) {
-      candidates.addAll(
-          [rect.topLeft, rect.topRight, rect.bottomLeft, rect.bottomRight]);
+      candidates.addAll([
+        rect.topLeft,
+        rect.topRight,
+        rect.bottomLeft,
+        rect.bottomRight,
+      ]);
     }
 
     // Grid intersections: rows at each obstacle edge + start/end Y;
@@ -561,8 +623,12 @@ class OrthogonalRouter {
       ]);
     }
 
-    candidates.removeWhere((p) => collisionRects.any((r) =>
-        p.dx > r.left && p.dx < r.right && p.dy > r.top && p.dy < r.bottom));
+    candidates.removeWhere(
+      (p) => collisionRects.any(
+        (r) =>
+            p.dx > r.left && p.dx < r.right && p.dy > r.top && p.dy < r.bottom,
+      ),
+    );
 
     return candidates.toList();
   }
@@ -598,9 +664,8 @@ class OrthogonalRouter {
             final crossings = existingSegments.isEmpty
                 ? 0
                 : _crossingCount(a, b, existingSegments);
-            final cost = dist +
-                overlap * _overlapPenalty +
-                crossings * _crossingPenalty;
+            final cost =
+                dist + overlap * _overlapPenalty + crossings * _crossingPenalty;
             adj[i].add((j, cost));
             adj[j].add((i, cost));
           }
@@ -669,15 +734,24 @@ class OrthogonalRouter {
     }
 
     if (path.length <= 2) return const [];
-    final inner =
-        path.reversed.skip(1).take(path.length - 2).map((i) => points[i]).toList();
+    final inner = path.reversed
+        .skip(1)
+        .take(path.length - 2)
+        .map((i) => points[i])
+        .toList();
     return inner;
   }
 
   // ── Path assembly ────────────────────────────────────────────────────────
 
-  static List<Offset> _assemble(Offset start, Offset? exitStub,
-      List<Offset> inner, Offset? entryStub, Offset end, List<Rect> obstacles) {
+  static List<Offset> _assemble(
+    Offset start,
+    Offset? exitStub,
+    List<Offset> inner,
+    Offset? entryStub,
+    Offset end,
+    List<Rect> obstacles,
+  ) {
     final fullPath = <Offset>[start];
     if (exitStub != null) fullPath.add(exitStub);
     fullPath.addAll(inner);
@@ -716,9 +790,13 @@ class OrthogonalRouter {
   /// stub and an L-corner so the connector turns in head-on instead of hugging
   /// the edge.
   static List<Offset> _forcePerpendicularEnd(
-      List<Offset> path, Offset stub, Offset end) {
+    List<Offset> path,
+    Offset stub,
+    Offset end,
+  ) {
     if (path.length < 2) return path;
-    final normal = end - stub; // points from stub into the node, along the edge normal
+    final normal =
+        end - stub; // points from stub into the node, along the edge normal
     final normalIsHorizontal = normal.dx.abs() > normal.dy.abs();
 
     final pen = path[path.length - 2];
@@ -791,8 +869,10 @@ class OrthogonalRouter {
   static bool _isAxisAligned(Offset a, Offset b) =>
       (a.dx - b.dx).abs() < 0.5 || (a.dy - b.dy).abs() < 0.5;
 
-  static List<Offset> _ensureAxisAligned(List<Offset> path,
-      [List<Rect> obstacles = const []]) {
+  static List<Offset> _ensureAxisAligned(
+    List<Offset> path, [
+    List<Rect> obstacles = const [],
+  ]) {
     if (path.length < 2) return path;
     final result = <Offset>[path.first];
 
@@ -813,9 +893,11 @@ class OrthogonalRouter {
         if (obstacles.isEmpty) {
           result.add(preferred);
         } else {
-          final prefClear = !_segmentHitsAny(a, preferred, obstacles) &&
+          final prefClear =
+              !_segmentHitsAny(a, preferred, obstacles) &&
               !_segmentHitsAny(preferred, b, obstacles);
-          final fbClear = !_segmentHitsAny(a, fallback, obstacles) &&
+          final fbClear =
+              !_segmentHitsAny(a, fallback, obstacles) &&
               !_segmentHitsAny(fallback, b, obstacles);
           result.add(prefClear ? preferred : (fbClear ? fallback : preferred));
         }
@@ -855,22 +937,29 @@ class OrthogonalRouter {
       final y = a.dy;
       final minX = min(a.dx, b.dx);
       final maxX = max(a.dx, b.dx);
-      return y > rect.top && y < rect.bottom &&
-          maxX > rect.left && minX < rect.right;
+      return y > rect.top &&
+          y < rect.bottom &&
+          maxX > rect.left &&
+          minX < rect.right;
     } else {
       final x = a.dx;
       final minY = min(a.dy, b.dy);
       final maxY = max(a.dy, b.dy);
-      return x > rect.left && x < rect.right &&
-          maxY > rect.top && minY < rect.bottom;
+      return x > rect.left &&
+          x < rect.right &&
+          maxY > rect.top &&
+          minY < rect.bottom;
     }
   }
 
   /// Returns the total length of segment (a→b) that overlaps (within [tol]
   /// pixels) any segment in [existing].
   static double _overlapLength(
-      Offset a, Offset b, List<(Offset, Offset)> existing,
-      {double tol = 6.0}) {
+    Offset a,
+    Offset b,
+    List<(Offset, Offset)> existing, {
+    double tol = 6.0,
+  }) {
     if (existing.isEmpty) return 0.0;
     final isH = (a.dy - b.dy).abs() < 0.5;
     double total = 0.0;
@@ -900,7 +989,10 @@ class OrthogonalRouter {
   /// perpendicularly crosses. Used to prefer routes/corners that don't weave
   /// through other connectors (which boxes regions and reads as tangled).
   static int _crossingCount(
-      Offset a, Offset b, List<(Offset, Offset)> existing) {
+    Offset a,
+    Offset b,
+    List<(Offset, Offset)> existing,
+  ) {
     if (existing.isEmpty) return 0;
     final isH = (a.dy - b.dy).abs() < 0.5;
     final aMinX = min(a.dx, b.dx), aMaxX = max(a.dx, b.dx);
@@ -929,18 +1021,71 @@ class OrthogonalRouter {
   /// Combined "weave" cost of a two-segment L (start→corner→end) against
   /// already-routed segments: collinear overlap length plus a heavier penalty
   /// per perpendicular crossing.
-  static double _lWeaveCost(Offset start, Offset corner, Offset end,
-      List<(Offset, Offset)> existing) {
+  static double _lWeaveCost(
+    Offset start,
+    Offset corner,
+    Offset end,
+    List<(Offset, Offset)> existing,
+  ) {
     const crossingWeight = 1000.0;
-    final overlap = _overlapLength(start, corner, existing) +
+    final overlap =
+        _overlapLength(start, corner, existing) +
         _overlapLength(corner, end, existing);
-    final crossings = _crossingCount(start, corner, existing) +
+    final crossings =
+        _crossingCount(start, corner, existing) +
         _crossingCount(corner, end, existing);
     return overlap + crossings * crossingWeight;
   }
 
+  /// Picks the lane for a shared facing-edge corridor. The pure midpoint can
+  /// sit right on top of an already-routed segment (or force the entry drop
+  /// through one), so try a few offsets within the gap and keep the lane whose
+  /// Z-path (start→lane→end) weaves through the least existing routing. Ties
+  /// keep the midpoint.
+  static double _clearSharedLane(
+    double mid,
+    double lo,
+    double hi,
+    Offset start,
+    Offset end, {
+    required bool vertical,
+    required List<(Offset, Offset)> existing,
+  }) {
+    if (existing.isEmpty || hi <= lo) return mid;
+    const crossingWeight = 1000.0;
+    double cost(double lane) {
+      final a = vertical ? Offset(start.dx, lane) : Offset(lane, start.dy);
+      final b = vertical ? Offset(end.dx, lane) : Offset(lane, end.dy);
+      final overlap =
+          _overlapLength(start, a, existing) +
+          _overlapLength(a, b, existing) +
+          _overlapLength(b, end, existing);
+      final crossings =
+          _crossingCount(start, a, existing) +
+          _crossingCount(a, b, existing) +
+          _crossingCount(b, end, existing);
+      return overlap + crossings * crossingWeight;
+    }
+
+    var best = mid.clamp(lo, hi);
+    var bestCost = cost(best);
+    const offsets = [-8.0, 8.0, -16.0, 16.0, -24.0, 24.0, -32.0, 32.0];
+    for (final offset in offsets) {
+      final lane = (mid + offset).clamp(lo, hi);
+      final laneCost = cost(lane);
+      if (laneCost < bestCost - 0.5) {
+        best = lane;
+        bestCost = laneCost;
+      }
+    }
+    return best;
+  }
+
   static List<Rect> _excludeRect(
-      List<Rect> originals, List<Rect> inflated, Rect exclude) {
+    List<Rect> originals,
+    List<Rect> inflated,
+    Rect exclude,
+  ) {
     return [
       for (int i = 0; i < originals.length; i++)
         if (originals[i] != exclude) inflated[i],
