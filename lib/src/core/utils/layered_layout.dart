@@ -137,10 +137,12 @@ class LayeredLayout {
     };
     final down = <String, List<String>>{};
     final up = <String, List<String>>{};
+    final adjacentEdges = <int, List<(String, String)>>{};
     for (final chain in chains) {
       for (var i = 0; i < chain.length - 1; i++) {
         (down[chain[i]] ??= []).add(chain[i + 1]);
         (up[chain[i + 1]] ??= []).add(chain[i]);
+        (adjacentEdges[rank[chain[i]]!] ??= []).add((chain[i], chain[i + 1]));
       }
     }
 
@@ -173,6 +175,55 @@ class LayeredLayout {
       }
     }
 
+    int crossingsBetween(int upperRank) {
+      if (upperRank < 0 || upperRank >= maxRank) return 0;
+      final edges = adjacentEdges[upperRank] ?? const [];
+      final upperPosition = {
+        for (final (index, id) in order[upperRank]!.indexed) id: index,
+      };
+      final lowerPosition = {
+        for (final (index, id) in order[upperRank + 1]!.indexed) id: index,
+      };
+      var crossings = 0;
+      for (var i = 0; i < edges.length; i++) {
+        for (var j = i + 1; j < edges.length; j++) {
+          final first = edges[i];
+          final second = edges[j];
+          if (first.$1 == second.$1 || first.$2 == second.$2) continue;
+          final upperDelta = upperPosition[first.$1]! - upperPosition[second.$1]!;
+          final lowerDelta = lowerPosition[first.$2]! - lowerPosition[second.$2]!;
+          if (upperDelta * lowerDelta < 0) crossings++;
+        }
+      }
+      return crossings;
+    }
+
+    int crossingsAround(int rankIndex) =>
+        crossingsBetween(rankIndex - 1) + crossingsBetween(rankIndex);
+
+    void transposeRank(int rankIndex) {
+      final current = order[rankIndex]!;
+      if (current.length < 2) return;
+      var improved = true;
+      while (improved) {
+        improved = false;
+        for (var i = 0; i < current.length - 1; i++) {
+          final before = crossingsAround(rankIndex);
+          final left = current[i];
+          current[i] = current[i + 1];
+          current[i + 1] = left;
+          final after = crossingsAround(rankIndex);
+          if (after < before) {
+            improved = true;
+          } else {
+            final right = current[i];
+            current[i] = current[i + 1];
+            current[i + 1] = right;
+          }
+        }
+      }
+    }
+
     for (var iter = 0; iter < 8; iter++) {
       for (var l = 1; l <= maxRank; l++) {
         final fixed = order[l - 1]!;
@@ -185,6 +236,13 @@ class LayeredLayout {
         final cur = order[l]!;
         sortByMedian(
             cur, {for (final n in cur) n: median(down[n] ?? const [], fixed)});
+      }
+      // Classic Sugiyama transpose phase: keep an adjacent swap only when it
+      // lowers the exact crossing count around that rank. Median sweeps find a
+      // good global order; transposition removes their remaining local
+      // inversions without making another rank worse.
+      for (var l = 0; l <= maxRank; l++) {
+        transposeRank(l);
       }
     }
 
