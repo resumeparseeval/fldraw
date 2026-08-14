@@ -726,7 +726,26 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (_isPanning) return;
-    if (event is PointerScrollEvent) {
+    if (event is PointerScaleEvent) {
+      // Browsers convert a Mac trackpad pinch into PointerScaleEvent rather
+      // than PointerPanZoomUpdateEvent. Apply its relative scale directly and
+      // keep the world position below the gesture stationary.
+      final state = _canvasBloc.state;
+      final newZoom = (state.viewportZoom * event.scale).clamp(
+        _computeMinZoom(),
+        double.infinity,
+      );
+      final editorBounds = getEditorBoundsInScreen(kNodeEditorWidgetKey);
+      if (editorBounds == null) return;
+      final focalPointRelativeToCenter = event.position - editorBounds.center;
+      final zoomPanCorrection =
+          focalPointRelativeToCenter *
+          (1 / newZoom - 1 / state.viewportZoom);
+      _canvasBloc.add(CanvasTransformed(
+        zoom: newZoom,
+        offset: state.viewportOffset + zoomPanCorrection,
+      ));
+    } else if (event is PointerScrollEvent) {
       final state = _canvasBloc.state;
       final isZoomModifier = HardwareKeyboard.instance.isMetaPressed ||
           HardwareKeyboard.instance.isControlPressed;
@@ -3138,8 +3157,6 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // Cardinal port → attachment relativePosition.
     const top = Offset(0.5, 0.0);
     const bottom = Offset(0.5, 1.0);
-    const left = Offset(0.0, 0.5);
-    const right = Offset(1.0, 0.5);
 
     for (final obj in canvasState.drawingObjects.values) {
       if (obj is! ArrowObject) continue;
@@ -3153,24 +3170,15 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       final d = tRect.center - sRect.center;
       late Offset startRel;
       late Offset endRel;
-      if (d.dy.abs() >= d.dx.abs()) {
-        // Predominantly vertical.
-        if (d.dy >= 0) {
-          startRel = bottom; // target below
-          endRel = top;
-        } else {
-          startRel = top; // target above (back-edge)
-          endRel = bottom;
-        }
+      // Layered layout is top-to-bottom. Keep forward edges on vertical ports
+      // even when ranks are horizontally far apart; side ports make long
+      // branches cut sideways through their siblings.
+      if (d.dy >= 0) {
+        startRel = bottom;
+        endRel = top;
       } else {
-        // Predominantly horizontal.
-        if (d.dx >= 0) {
-          startRel = right; // target to the right
-          endRel = left;
-        } else {
-          startRel = left;
-          endRel = right;
-        }
+        startRel = top;
+        endRel = bottom;
       }
 
       _canvasBloc.add(DrawingObjectUpdated(obj.copyWith(

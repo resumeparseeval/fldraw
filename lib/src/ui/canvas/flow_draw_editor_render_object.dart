@@ -749,23 +749,47 @@ class FlowDrawEditorRenderBox extends RenderBox
 
     // Collect endpoints per (objectId, side), keeping each one's stored
     // along-side position so we can RESPECT where the user placed it.
-    final sideGroups = <String, List<(String end, double t)>>{};
-    void addEndpoint(String arrowId, String which, ObjectAttachment att) {
+    final sideGroups = <String, List<(String end, double t, double peer)>>{};
+    void addEndpoint(
+      String arrowId,
+      String which,
+      ObjectAttachment att,
+      ObjectAttachment? opposite,
+    ) {
       if (_attachedRect(att) == null) return;
+      // A diamond's cardinal ports are its actual vertices. Spreading several
+      // endpoints along its rectangular bounds detaches them from the shape.
+      if (drawingObjects[att.objectId] is DiamondObject) return;
       final side = _sideOf(att.relativePosition);
       final t = _alongSide(side, att.relativePosition);
+      final oppositeRect = opposite == null ? null : _attachedRect(opposite);
+      final peer = oppositeRect == null
+          ? t
+          : (side == 2 || side == 3
+              ? oppositeRect.center.dx
+              : oppositeRect.center.dy);
       sideGroups
           .putIfAbsent('${att.objectId}:$side', () => [])
-          .add(('$arrowId:$which', t));
+          .add(('$arrowId:$which', t, peer));
     }
 
     for (final obj in drawingObjects.values) {
       if (obj is! ArrowObject) continue;
       if (obj.startAttachment != null) {
-        addEndpoint(obj.id, 'start', obj.startAttachment!);
+        addEndpoint(
+          obj.id,
+          'start',
+          obj.startAttachment!,
+          obj.endAttachment,
+        );
       }
       if (obj.endAttachment != null) {
-        addEndpoint(obj.id, 'end', obj.endAttachment!);
+        addEndpoint(
+          obj.id,
+          'end',
+          obj.endAttachment!,
+          obj.startAttachment,
+        );
       }
     }
 
@@ -776,16 +800,31 @@ class FlowDrawEditorRenderBox extends RenderBox
     const double minGap = 0.12; // min spacing along a side (fraction)
     for (final entry in sideGroups.entries) {
       final side = int.parse(entry.key.split(':').last);
-      final members = [...entry.value]..sort((a, b) => a.$2.compareTo(b.$2));
+      final members = [...entry.value]..sort((a, b) {
+        final portOrder = a.$2.compareTo(b.$2);
+        return portOrder != 0 ? portOrder : a.$3.compareTo(b.$3);
+      });
       if (members.length < 2) continue;
 
       final adjusted = <double>[];
-      var prev = double.negativeInfinity;
-      for (final m in members) {
-        var t = m.$2;
-        if (t < prev + minGap) t = prev + minGap; // overlapping → push along
-        adjusted.add(t);
-        prev = t;
+      if ((members.last.$2 - members.first.$2).abs() < 1e-4) {
+        // Auto-layout puts sibling edges on one cardinal port. Fan them out
+        // symmetrically in the same order as their opposite nodes.
+        final gap = min(minGap, 1 / (members.length - 1));
+        final span = gap * (members.length - 1);
+        final center = members.first.$2;
+        final start = (center - span / 2).clamp(0.0, 1.0 - span);
+        for (var i = 0; i < members.length; i++) {
+          adjusted.add(start + i * gap);
+        }
+      } else {
+        var prev = double.negativeInfinity;
+        for (final m in members) {
+          var t = m.$2;
+          if (t < prev + minGap) t = prev + minGap;
+          adjusted.add(t);
+          prev = t;
+        }
       }
       // If pushing ran past the end, shift the whole run back to fit in [0,1].
       final overflow = adjusted.last - 1.0;

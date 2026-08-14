@@ -201,6 +201,14 @@ class LayeredLayout {
     int crossingsAround(int rankIndex) =>
         crossingsBetween(rankIndex - 1) + crossingsBetween(rankIndex);
 
+    int totalCrossings() {
+      var total = 0;
+      for (var rankIndex = 0; rankIndex < maxRank; rankIndex++) {
+        total += crossingsBetween(rankIndex);
+      }
+      return total;
+    }
+
     void transposeRank(int rankIndex) {
       final current = order[rankIndex]!;
       if (current.length < 2) return;
@@ -224,6 +232,22 @@ class LayeredLayout {
       }
     }
 
+    var bestCrossings = totalCrossings();
+    var bestOrder = <int, List<String>>{
+      for (var rankIndex = 0; rankIndex <= maxRank; rankIndex++)
+        rankIndex: List<String>.from(order[rankIndex]!),
+    };
+
+    void retainBestOrder() {
+      final crossings = totalCrossings();
+      if (crossings >= bestCrossings) return;
+      bestCrossings = crossings;
+      bestOrder = <int, List<String>>{
+        for (var rankIndex = 0; rankIndex <= maxRank; rankIndex++)
+          rankIndex: List<String>.from(order[rankIndex]!),
+      };
+    }
+
     for (var iter = 0; iter < 8; iter++) {
       for (var l = 1; l <= maxRank; l++) {
         final fixed = order[l - 1]!;
@@ -231,6 +255,11 @@ class LayeredLayout {
         sortByMedian(
             cur, {for (final n in cur) n: median(up[n] ?? const [], fixed)});
       }
+      for (var l = 0; l <= maxRank; l++) {
+        transposeRank(l);
+      }
+      retainBestOrder();
+
       for (var l = maxRank - 1; l >= 0; l--) {
         final fixed = order[l + 1]!;
         final cur = order[l]!;
@@ -244,6 +273,15 @@ class LayeredLayout {
       for (var l = 0; l <= maxRank; l++) {
         transposeRank(l);
       }
+      retainBestOrder();
+    }
+
+    // Median sweeps are heuristic and can make a later pass worse. Use the
+    // lowest-crossing ordering encountered, not simply the final pass.
+    for (var l = 0; l <= maxRank; l++) {
+      order[l]!
+        ..clear()
+        ..addAll(bestOrder[l]!);
     }
 
     // ── 5. Coordinate assignment. ──────────────────────────────────────────
