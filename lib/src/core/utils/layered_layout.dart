@@ -80,6 +80,26 @@ class LayeredLayout {
       if (stateMap[n] != 2) dfs(n);
     }
 
+    // A stable traversal order gives equal-scoring sibling arrangements a
+    // meaningful tie-break: preserve the caller's outgoing edge order instead
+    // of inheriting an arbitrary set/topological iteration order.
+    final discoveryOrder = <String, int>{};
+    var discoveryIndex = 0;
+    void discover(String id) {
+      if (discoveryOrder.containsKey(id)) return;
+      discoveryOrder[id] = discoveryIndex++;
+      for (final child in adj[id]!) {
+        discover(child);
+      }
+    }
+    final hasIncoming = {for (final edge in realEdges) edge.$2};
+    for (final node in nodes) {
+      if (!hasIncoming.contains(node.id)) discover(node.id);
+    }
+    for (final node in nodes) {
+      discover(node.id);
+    }
+
     // ── 2. Rank assignment: longest path over the acyclic edge set. ────────
     final rank = <String, int>{for (final n in nodeIds) n: 0};
     final outA = <String, List<String>>{for (final n in nodeIds) n: []};
@@ -108,8 +128,13 @@ class LayeredLayout {
 
     // ── 3. Virtual nodes so each acyclic edge spans exactly one rank. ──────
     final ranks = <int, List<String>>{for (var i = 0; i <= maxRank; i++) i: []};
-    for (final n in nodeIds) {
-      ranks[rank[n]!]!.add(n);
+    for (final node in nodes) {
+      ranks[rank[node.id]!]!.add(node.id);
+    }
+    for (final rankNodes in ranks.values) {
+      rankNodes.sort(
+        (a, b) => discoveryOrder[a]!.compareTo(discoveryOrder[b]!),
+      );
     }
     var vc = 0;
     final chains = <List<String>>[];

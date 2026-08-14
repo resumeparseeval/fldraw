@@ -33,4 +33,24 @@ void main() {
 
     expect(targetOrder, orderedEquals([0, 1, 2]));
   });
+
+  test('uses outgoing edge order to break symmetric sibling ties', () {
+    const size = Size(100, 60);
+    const nodes = [
+      LayoutNode('entry', size),
+      LayoutNode('third', size),
+      LayoutNode('second', size),
+      LayoutNode('first', size),
+    ];
+    const edges = [
+      ('entry', 'first'),
+      ('entry', 'second'),
+      ('entry', 'third'),
+    ];
+
+    final result = const LayeredLayout().layout(nodes, edges);
+
+    expect(result['first']!.dx, lessThan(result['second']!.dx));
+    expect(result['second']!.dx, lessThan(result['third']!.dx));
+  });
 }
