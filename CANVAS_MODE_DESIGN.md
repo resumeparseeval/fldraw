@@ -366,17 +366,42 @@ helpers; move them next to the importer).
 ## 11. Build order (risk-first)
 
 1. **Selection resolver + `ObjectsLineStyleChanged`** — pure model/bloc work,
-   fully unit-testable, unblocks the tool layer. *(No LLM.)*
+   fully unit-testable, unblocks the tool layer. *(No LLM.)* ✅ **DONE**
+   (`lib/src/blocs/selection/selection_resolver.dart`,
+   `ObjectsLineStyleChanged` in `canvas_event.dart`/`canvas_bloc.dart`,
+   `test/canvas_mode_step1_test.dart` — 12 tests).
 2. **Tool dispatch layer** over existing events — unit-testable without any LLM;
-   proves every verb works against the BLoCs.
+   proves every verb works against the BLoCs. ✅ **DONE**
+   (`lib/src/core/agent/tool_dispatcher.dart` + `tool_call.dart`,
+   `test/tool_dispatcher_test.dart` — 15 tests; 13 tools wired).
 3. **Agent loop on the API-key path** — proves the end-to-end tool-use cycle
-   fast, before touching OAuth.
-4. **Chat side panel** with live streaming + Stop + selection chip.
+   fast, before touching OAuth. ✅ **DONE** — `LlmProvider` interface +
+   `CanvasAgent` loop + `GeminiProvider` (free-tier `gemini-flash-lite-latest`)
+   in `lib/src/core/agent/`; `test/canvas_agent_test.dart` +
+   `test/gemini_provider_test.dart` (11 tests, fake provider + mocked HTTP).
+   *(Started with Gemini rather than Anthropic/OpenAI key — free tier.)*
+4. **Chat side panel** with live streaming + Stop + selection chip. ✅ **DONE** —
+   `CanvasChatController` (testable logic) + `CanvasChatPanel` (docked UI) in
+   `lib/src/ui/canvas/`; wired into the example via a "Canvas Mode" toggle;
+   Gemini key in SharedPreferences; `test/canvas_chat_controller_test.dart`
+   (5 tests); example builds clean for macOS.
 5. **Turn-grouped history + version timeline** (§9) — `AgentTurnApplied`
    transaction + `HistoryRestored` + named entries in `history_panel.dart`. Goes
-   in alongside the panel so every turn is revertible from day one.
-6. **`web_search` tool** — direction #2.
-7. **`read_drawing` + `apply_style_template`** — direction #5.
+   in alongside the panel so every turn is revertible from day one. ✅ **DONE** —
+   `AgentTurnBegan`/`AgentTurnCommitted` + `_inAgentTurn` guard collapse a turn
+   into one labelled undo entry; `HistoryRestored`/`controller.restoreTo` +
+   per-entry Restore button; `test/canvas_mode_history_test.dart` (7 tests);
+   example builds clean.
+6. **`web_search`** — direction #2. ✅ **DONE** — implemented as Gemini
+   `googleSearch` grounding (a provider capability combined with function calling
+   in one request on Gemini 3+), not a dispatcher tool. `enableWebSearch` flag +
+   header toggle; 3 tests. NB: this revises the §4 plan that listed `web_search`
+   as a dispatched tool.
+7. **`read_drawing` + `apply_style_template`** — direction #5. ✅ **DONE** —
+   `GuideGeometry` (pure, shared polyline extraction) in `core/utils`;
+   `read_drawing` (polyline + closed + bbox, downsampled) and
+   `apply_style_template` (copy fill/stroke/line-style) tools;
+   `test/canvas_mode_style_transfer_test.dart` (12 tests).
 8. **OAuth (Claude, then OpenAI)** — last and isolated, since it's the riskiest
    and the API-key path lets earlier steps ship independently.
 9. **Phase 2:** pinned checkpoints + cross-session persisted history.

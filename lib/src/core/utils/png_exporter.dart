@@ -13,15 +13,20 @@ import 'package:perfect_freehand/perfect_freehand.dart';
 class PngExporter {
   PngExporter._();
 
-  // Theme constants matching the app's dark theme.
-  static const _defaultStrokeColor = ui.Color(0xFFE0E0E0);
-  static const _defaultFillColor = ui.Color(0xFF2A2A2A);
-  static const _arrowColor = ui.Color(0xFF90CAF9);
-  static const _lineColor = ui.Color(0xFFA5D6A7);
+  // Theme constants matching the app's on-canvas rendering: white strokes on a
+  // dark background, transparent shape fills, squircle corners.
+  static const _defaultStrokeColor = ui.Color(0xFFFFFFFF);
+  static const _defaultFillColor = ui.Color(0x00000000); // transparent
+  static const _arrowColor = ui.Color(0xFFFFFFFF);
+  static const _lineColor = ui.Color(0xFFFFFFFF);
   static const _pencilColor = ui.Color(0xFFFFCC80);
   static const _figureColor = ui.Color(0xFFCE93D8);
-  static const _textColor = ui.Color(0xFFE0E0E0);
-  static const _defaultStrokeWidth = 2.0;
+  static const _textColor = ui.Color(0xFFFFFFFF);
+  static const _defaultStrokeWidth = 1.5;
+
+  /// Squircle corner radius for rectangles and edge bends — matches the app's
+  /// node corner radius (see flow_draw_editor_render_object.dart).
+  static const double _cornerRadius = 36.0;
 
   /// Exports drawing objects to PNG bytes.
   ///
@@ -109,15 +114,19 @@ class PngExporter {
   // -- Shape Renderers --------------------------------------------------------
 
   static void _drawRectangle(Canvas canvas, RectangleObject obj) {
-    final radius = obj.borderRadius > 0 ? obj.borderRadius : 6.0;
-    final rrect = RRect.fromRectAndRadius(obj.rect, Radius.circular(radius));
+    final radius = obj.borderRadius > 0 ? obj.borderRadius : _cornerRadius;
+    // Apple-style rounded superellipse (squircle), matching the app. Clamp the
+    // radius so an over-large value can't degenerate on small boxes.
+    final r = math.min(radius, math.min(obj.rect.width, obj.rect.height) / 2);
+    final squircle =
+        RSuperellipse.fromRectAndRadius(obj.rect, Radius.circular(math.max(0, r)));
     final fill = _fillPaint(obj.fillColor);
     final stroke = _strokePaint(obj.strokeColor);
 
     _withRotation(canvas, obj.angle, obj.rect.center, () {
-      canvas.drawRRect(rrect, fill);
-      canvas.drawRRect(rrect, stroke);
-      _drawShapeText(canvas, obj.rect, obj.text, obj.textStyle);
+      canvas.drawRSuperellipse(squircle, fill);
+      canvas.drawRSuperellipse(squircle, stroke);
+      _drawShapeText(canvas, obj.rect, obj.text, obj.textStyle, obj.richText);
     });
   }
 
@@ -336,14 +345,20 @@ class PngExporter {
   // -- Text Helpers -----------------------------------------------------------
 
   /// Draws centered text inside a shape's rect.
-  static void _drawShapeText(
-      Canvas canvas, Rect shapeRect, String? text, TextStyle? style) {
+  static void _drawShapeText(Canvas canvas, Rect shapeRect, String? text,
+      TextStyle? style, [List<TextRun>? runs]) {
     if (text == null || text.isEmpty) return;
 
-    const defaultStyle =
-        TextStyle(fontSize: 14, color: _textColor, fontFamily: 'sans-serif');
+    // Reuse the app's text resolution so per-run styling (e.g. the orange
+    // "I Am" title, monospace family) renders identically to the canvas.
+    final resolvedStyle = effectiveShapeTextStyle(
+      style: style,
+      customized: false,
+      defaultFamily: kEditorDefaultFontFamily,
+      defaultSize: kEditorDefaultFontSize,
+    ).copyWith(color: style?.color ?? _textColor);
     final tp = TextPainter(
-      text: TextSpan(text: text, style: style ?? defaultStyle),
+      text: buildShapeTextSpan(text: text, runs: runs, base: resolvedStyle),
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.center,
     )..layout(maxWidth: shapeRect.width - 8);
@@ -449,9 +464,9 @@ class PngExporter {
 
   // -- Orthogonal Path --------------------------------------------------------
 
-  /// Builds a [Path] with rounded corners at each bend in an orthogonal route.
+  /// Builds a [Path] with squircle (continuous) corners at each bend in an
+  /// orthogonal route, matching the app's edge rendering and node corners.
   static Path _buildRoundedOrthogonalPath(List<Offset> allPoints) {
-    const double cornerRadius = 30.0;
     final path = Path();
     path.moveTo(allPoints[0].dx, allPoints[0].dy);
 
@@ -461,7 +476,7 @@ class PngExporter {
       final next = allPoints[i + 1];
       final segPrev = (curr - prev).distance;
       final segNext = (next - curr).distance;
-      final r = math.min(cornerRadius, math.min(segPrev / 2, segNext / 2));
+      final r = math.min(_cornerRadius, math.min(segPrev / 2, segNext / 2));
 
       if (r < 1.0) {
         path.lineTo(curr.dx, curr.dy);
@@ -478,17 +493,17 @@ class PngExporter {
         continue;
       }
 
-      final arcStart =
-          Offset(curr.dx - dirIn.dx * r, curr.dy - dirIn.dy * r);
-      final arcEnd =
-          Offset(curr.dx + dirOut.dx * r, curr.dy + dirOut.dy * r);
-
-      path.lineTo(arcStart.dx, arcStart.dy);
-      path.arcToPoint(
-        arcEnd,
-        radius: Radius.circular(r),
-        clockwise: cross > 0,
-      );
+      // Squircle corner: cubic Bézier with control points biased toward the
+      // vertex (k≈0.83), matching _addSquircleCorner in the render object.
+      final start = Offset(curr.dx - dirIn.dx * r, curr.dy - dirIn.dy * r);
+      final end = Offset(curr.dx + dirOut.dx * r, curr.dy + dirOut.dy * r);
+      path.lineTo(start.dx, start.dy);
+      const k = 0.83;
+      final c1 = Offset(start.dx + (curr.dx - start.dx) * k,
+          start.dy + (curr.dy - start.dy) * k);
+      final c2 = Offset(
+          end.dx + (curr.dx - end.dx) * k, end.dy + (curr.dy - end.dy) * k);
+      path.cubicTo(c1.dx, c1.dy, c2.dx, c2.dy, end.dx, end.dy);
     }
 
     path.lineTo(allPoints.last.dx, allPoints.last.dy);

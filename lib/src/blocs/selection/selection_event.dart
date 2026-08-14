@@ -63,3 +63,15 @@ final class DrawingObjectHovered extends SelectionEvent {
   @override
   List<Object> get props => [drawingObjectId ?? ''];
 }
+
+/// Pick (or clear) a specific edge endpoint for arrow-key movement. Pass null
+/// to clear. Setting an endpoint also clears any object/node selection so the
+/// arrow keys unambiguously target the endpoint.
+final class EndpointSelected extends SelectionEvent {
+  final SelectedEndpoint? endpoint;
+
+  const EndpointSelected(this.endpoint);
+
+  @override
+  List<Object> get props => [endpoint?.objectId ?? '', endpoint?.isStart ?? false];
+}

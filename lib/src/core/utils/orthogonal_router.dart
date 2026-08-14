@@ -14,7 +14,11 @@ class OrthogonalRouter {
 
   // ── Constants (world-space, no scaling) ──────────────────────────────────
   static const double _padding = 40.0;
-  static const double _stubDistance = 45.0;
+  // Standoff before a connector turns into a node. Sized to comfortably fit the
+  // edge's corner radius (~36) on BOTH sides of the final bend, so the approach
+  // turn is a wide sweep with room to spare rather than a cramped corner that
+  // collides with a neighbouring connector entering the same node.
+  static const double _stubDistance = 80.0;
   static const double _bendPenalty = 20.0;
   // Penalty per unit length of overlap with an existing path segment.
   static const double _overlapPenalty = 8.0;
@@ -65,14 +69,20 @@ class OrthogonalRouter {
     if (startObjectRect != null) innerInflated.add(startObjectRect.inflate(2.0));
     if (endObjectRect != null) innerInflated.add(endObjectRect.inflate(2.0));
 
+    // Effective stub distance (world-space). Kept at the flat baseline — the
+    // zoom-vs-corner mismatch is handled by capping the painted corner radius
+    // (see render object), not by inflating the standoff, which over-pushes
+    // edges and creates loops at low zoom.
+    final double stubDistance = _stubDistance;
+
     // Compute exit/entry stubs.
     var exitStub = startObjectRect != null
         ? _computeExitStub(start, startObjectRect,
-            _excludeRect(relevant, inflated, startObjectRect), end)
+            _excludeRect(relevant, inflated, startObjectRect), end, stubDistance)
         : null;
     var entryStub = endObjectRect != null
         ? _computeExitStub(end, endObjectRect,
-            _excludeRect(relevant, inflated, endObjectRect), start)
+            _excludeRect(relevant, inflated, endObjectRect), start, stubDistance)
         : null;
 
     // Tight facing-edge gap: when the source's exit and the target's entry leave
@@ -108,7 +118,7 @@ class OrthogonalRouter {
         final innerGap = sr.right < er.left
             ? er.left - sr.right // source on the left
             : (er.right < sr.left ? sr.left - er.right : -1.0);
-        if (innerGap > minSharedGap && innerGap < _stubDistance * 2) {
+        if (innerGap > minSharedGap && innerGap < stubDistance * 2) {
           final mid = sr.right < er.left
               ? (sr.right + er.left) / 2
               : (er.right + sr.left) / 2;
@@ -126,7 +136,7 @@ class OrthogonalRouter {
             : (er.bottom < sr.top ? sr.top - er.bottom : -1.0);
         if (hOverlap > 0 &&
             innerGap > minSharedGap &&
-            innerGap < _stubDistance * 2) {
+            innerGap < stubDistance * 2) {
           final mid = sr.bottom < er.top
               ? (sr.bottom + er.top) / 2
               : (er.bottom + sr.top) / 2;
@@ -230,12 +240,14 @@ class OrthogonalRouter {
   // ── Exit stub computation ───────────────────────────────────────────────
 
   static Offset _computeExitStub(Offset point, Rect objectRect,
-      [List<Rect> obstacles = const [], Offset? target]) {
+      [List<Rect> obstacles = const [],
+      Offset? target,
+      double stubDistance = _stubDistance]) {
     final exits = <Offset>[
-      Offset(objectRect.left - _stubDistance, point.dy), // left
-      Offset(objectRect.right + _stubDistance, point.dy), // right
-      Offset(point.dx, objectRect.top - _stubDistance), // top
-      Offset(point.dx, objectRect.bottom + _stubDistance), // bottom
+      Offset(objectRect.left - stubDistance, point.dy), // left
+      Offset(objectRect.right + stubDistance, point.dy), // right
+      Offset(point.dx, objectRect.top - stubDistance), // top
+      Offset(point.dx, objectRect.bottom + stubDistance), // bottom
     ];
 
     bool isClear(Offset p) => !obstacles.any((r) =>
@@ -259,9 +271,9 @@ class OrthogonalRouter {
       // it turns in. Prefer the full stub; if crowded, step inward to the
       // largest still-clear clearance down to a visible floor.
       if (isClear(exits[onEdge])) return exits[onEdge];
-      for (final d in const [
-        _stubDistance * 0.6,
-        _stubDistance * 0.4,
+      for (final d in [
+        stubDistance * 0.6,
+        stubDistance * 0.4,
         16.0,
         10.0,
       ]) {

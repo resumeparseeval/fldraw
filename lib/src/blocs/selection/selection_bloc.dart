@@ -13,6 +13,7 @@ class SelectionBloc extends Bloc<SelectionEvent, SelectionState> {
         SelectionReplaced e => _onSelectionReplaced(e, emit),
         SelectionCleared e => _onSelectionCleared(e, emit),
         DrawingObjectHovered e => _onDrawingObjectHovered(e, emit),
+        EndpointSelected e => _onEndpointSelected(e, emit),
       });
     });
   }
@@ -25,6 +26,7 @@ class SelectionBloc extends Bloc<SelectionEvent, SelectionState> {
         ...state.selectedDrawingObjectIds,
         ...event.drawingObjectIds
       },
+      clearSelectedEndpoint: true,
     ));
   }
 
@@ -42,7 +44,22 @@ class SelectionBloc extends Bloc<SelectionEvent, SelectionState> {
     emit(state.copyWith(
       selectedNodeIds: event.nodeIds,
       selectedDrawingObjectIds: event.drawingObjectIds,
+      clearSelectedEndpoint: true,
     ));
+  }
+
+  void _onEndpointSelected(
+      EndpointSelected event, Emitter<SelectionState> emit) {
+    if (event.endpoint == null) {
+      emit(state.copyWith(clearSelectedEndpoint: true));
+    } else {
+      // Picking an endpoint takes over the keyboard, so clear object selection.
+      emit(state.copyWith(
+        selectedNodeIds: const {},
+        selectedDrawingObjectIds: const {},
+        selectedEndpoint: event.endpoint,
+      ));
+    }
   }
 
   void _onSelectionCleared(

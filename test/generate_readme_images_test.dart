@@ -37,11 +37,18 @@ Future<void> _render(String mermaid, String outPath, {double pixelRatio = 2.0}) 
 
     final startId = o.startAttachment?.objectId;
     final endId = o.endAttachment?.objectId;
-    final startRect = startId != null ? objects[startId]?.rect : null;
-    final endRect = endId != null ? objects[endId]?.rect : null;
+    final startObj = startId != null ? objects[startId] : null;
+    final endObj = endId != null ? objects[endId] : null;
+    final startRect = startObj?.rect;
+    final endRect = endObj?.rect;
 
     var start = startRect != null ? _snapToNearestEdge(o.start, startRect) : o.start;
     var end = endRect != null ? _snapToNearestEdge(o.end, endRect) : o.end;
+    // For non-rectangular shapes (e.g. diamonds) the bounding-box edge sits
+    // outside the visual border, leaving a gap. Pull the endpoint onto the
+    // actual shape path so the line touches the drawn edge.
+    if (startObj != null) start = _snapToShapeBorder(start, startObj);
+    if (endObj != null) end = _snapToShapeBorder(end, endObj);
 
     final obstacles = <Rect>[];
     for (final other in objects.values) {
@@ -77,6 +84,65 @@ Future<void> _render(String mermaid, String outPath, {double pixelRatio = 2.0}) 
   print('wrote $outPath (${png.length} bytes, ${objects.length} objects)');
 }
 
+/// Pulls a (bounding-box-snapped) endpoint onto the object's actual drawn
+/// border. Rectangles/circles already fill their box closely enough, but
+/// diamonds and parallelograms have a visual border inset from the box, so the
+/// line would otherwise stop short. We sample the shape's [Path] and find the
+/// border point along the endpoint's entry axis (vertical if the point is on
+/// the box top/bottom edge, horizontal if on the left/right edge).
+Offset _snapToShapeBorder(Offset point, DrawingObject obj) {
+  final rect = obj.rect;
+  const eps = 0.5;
+  final onTopOrBottom =
+      (point.dy - rect.top).abs() < eps || (point.dy - rect.bottom).abs() < eps;
+
+  // Diamonds connect at their 4 vertices (the canonical flowchart look): a
+  // vertical entry meets the top/bottom point, a horizontal entry meets the
+  // left/right point. This makes the stub land exactly on a vertex instead of
+  // mid-face, where a straight stub would otherwise meet the slanted edge.
+  if (obj is DiamondObject) {
+    final c = rect.center;
+    if (onTopOrBottom) {
+      return Offset(c.dx, point.dy <= c.dy ? rect.top : rect.bottom);
+    }
+    return Offset(point.dx <= c.dx ? rect.left : rect.right, c.dy);
+  }
+
+  final Path path;
+  if (obj is ParallelogramObject) {
+    path = obj.path;
+  } else {
+    return point;
+  }
+
+  Offset? best;
+  double bestDelta = double.infinity;
+  for (final metric in path.computeMetrics()) {
+    for (double d = 0; d <= metric.length; d += 1.0) {
+      final pos = metric.getTangentForOffset(d)?.position;
+      if (pos == null) continue;
+      if (onTopOrBottom) {
+        // Entry is vertical: keep x, find the border y nearest the point.
+        if ((pos.dx - point.dx).abs() > 1.5) continue;
+        final delta = (pos.dy - point.dy).abs();
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          best = Offset(point.dx, pos.dy);
+        }
+      } else {
+        // Entry is horizontal: keep y, find the border x nearest the point.
+        if ((pos.dy - point.dy).abs() > 1.5) continue;
+        final delta = (pos.dx - point.dx).abs();
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          best = Offset(pos.dx, point.dy);
+        }
+      }
+    }
+  }
+  return best ?? point;
+}
+
 /// Mirrors the render object's snap: moves [point] onto the nearest edge of
 /// [rect] so the router's stub leaves the box perpendicularly.
 Offset _snapToNearestEdge(Offset point, Rect rect) {
@@ -92,25 +158,37 @@ Offset _snapToNearestEdge(Offset point, Rect rect) {
   return Offset(point.dx, rect.bottom);
 }
 
-Future<void> _loadRealFont() async {
-  // flutter test ships the "Ahem" font where every glyph is a solid box, so
-  // text would render as bars. Register a real TTF under the family name the
-  // exporter asks for ('sans-serif') so labels are legible.
-  const candidates = [
-    '/System/Library/Fonts/Supplemental/Arial.ttf',
-    '/Library/Fonts/Arial Unicode.ttf',
-  ];
-  for (final path in candidates) {
+Future<void> _registerFont(String family, List<String> candidatePaths) async {
+  for (final path in candidatePaths) {
     final f = File(path);
     if (f.existsSync()) {
-      final loader = FontLoader('sans-serif')
+      final loader = FontLoader(family)
         ..addFont(Future.value(f.readAsBytesSync().buffer.asByteData()));
       await loader.load();
       return;
     }
   }
   // ignore: avoid_print
-  print('WARNING: no real font found; text may render as boxes');
+  print('WARNING: no font found for family "$family"; text may render as boxes');
+}
+
+Future<void> _loadRealFont() async {
+  // flutter test ships the "Ahem" font (every glyph is a solid box), so we must
+  // register real TTFs under EVERY family the exporter asks for: 'sans-serif'
+  // for body labels and the default font family (Courier) for the monospace
+  // title runs. Without the Courier registration, titles render as tofu boxes.
+  const sans = [
+    '/System/Library/Fonts/Supplemental/Arial.ttf',
+    '/Library/Fonts/Arial Unicode.ttf',
+  ];
+  const mono = [
+    '/System/Library/Fonts/Supplemental/Courier New.ttf',
+    '/System/Library/Fonts/Menlo.ttc',
+    '/System/Library/Fonts/Monaco.ttf',
+  ];
+  await _registerFont('sans-serif', sans);
+  await _registerFont('Courier', mono);
+  await _registerFont(kEditorDefaultFontFamily, mono);
 }
 
 void main() {

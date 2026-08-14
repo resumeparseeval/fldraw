@@ -127,6 +127,25 @@ final List<ToolSchema> canvasToolSchemas = [
     }, required: ['directed']),
   ),
   ToolSchema(
+    name: 'move_endpoint',
+    description:
+        'Slide one endpoint of an edge along the border of the node it is '
+        'attached to, keeping it connected. Use to fine-tune where an edge meets '
+        'a node (e.g. "move the arrow\'s end a bit to the right on its node"). '
+        'Only works on an endpoint that is attached to a node.',
+    parameters: _object({
+      'edgeId': _string('Id of the edge (arrow/line) to adjust.'),
+      'endpoint': _string('Which endpoint to move.',
+          enumValues: ['start', 'end']),
+      'steps': {
+        'type': 'integer',
+        'description':
+            'Signed number of slide steps (each ~1/12 of the edge length). '
+            'Negative slides toward the edge start, positive toward the end.',
+      },
+    }, required: ['edgeId', 'endpoint', 'steps']),
+  ),
+  ToolSchema(
     name: 'create_nodes',
     description:
         'Create one or more node shapes. Each node may set label, shape, optional '

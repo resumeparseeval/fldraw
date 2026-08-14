@@ -43,6 +43,7 @@ class ToolDispatcher {
     'set_line_style',
     'set_text_style',
     'set_edge_direction',
+    'move_endpoint',
     'create_nodes',
     'create_edges',
     'delete_objects',
@@ -76,6 +77,7 @@ class ToolDispatcher {
         'set_line_style' => _setLineStyle(call),
         'set_text_style' => _setTextStyle(call),
         'set_edge_direction' => _setEdgeDirection(call),
+        'move_endpoint' => _moveEndpoint(call),
         'create_nodes' => _createNodes(call),
         'create_edges' => _createEdges(call),
         'delete_objects' => _deleteObjects(call),
@@ -228,6 +230,36 @@ class ToolDispatcher {
     ));
     return ToolResult.ok(
       'Made ${ids.length} edge(s) ${directed ? 'directed' : 'undirected'}',
+      callId: c.id,
+    );
+  }
+
+  /// Slides one endpoint of an edge along the edge of the node it is attached
+  /// to, keeping it connected. args: { edgeId, endpoint: "start"|"end",
+  /// steps: int (negative = toward edge start, positive = toward edge end) }.
+  ToolResult _moveEndpoint(ToolCall c) {
+    final edgeId = (c.args['edgeId'] ?? c.args['id'])?.toString();
+    if (edgeId == null || edgeId.isEmpty) {
+      return ToolResult.error('Specify edgeId', callId: c.id);
+    }
+    final obj = canvasBloc.state.drawingObjects[edgeId];
+    if (obj is! ArrowObject && obj is! LineObject) {
+      return ToolResult.error('$edgeId is not an edge', callId: c.id);
+    }
+    final endpoint =
+        (c.args['endpoint'] as String?)?.trim().toLowerCase() ?? 'end';
+    if (endpoint != 'start' && endpoint != 'end') {
+      return ToolResult.error(
+          'endpoint must be "start" or "end"', callId: c.id);
+    }
+    final steps = (c.args['steps'] as num?)?.toInt() ?? 1;
+    if (steps == 0) {
+      return ToolResult.error('steps must be non-zero', callId: c.id);
+    }
+    canvasBloc
+        .add(EndpointMovedAlongEdge(edgeId, endpoint == 'start', steps));
+    return ToolResult.ok(
+      'Moved $endpoint endpoint of $edgeId by $steps step(s) along its node edge',
       callId: c.id,
     );
   }
