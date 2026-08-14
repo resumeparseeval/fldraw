@@ -12,15 +12,15 @@ List<Offset> _arrowPolyline(ArrowObject arrow) {
 
 @visibleForTesting
 int countArrowCrossings(Iterable<ArrowObject> arrows) {
-  final polylines = arrows
-      .map(_arrowPolyline)
-      .where((polyline) => polyline.length >= 2)
+  final routes = arrows
+      .map((arrow) => (arrow: arrow, polyline: _arrowPolyline(arrow)))
+      .where((route) => route.polyline.length >= 2)
       .toList();
   var total = 0;
-  for (var i = 0; i < polylines.length; i++) {
-    for (var j = i + 1; j < polylines.length; j++) {
-      final first = polylines[i];
-      final second = polylines[j];
+  for (var i = 0; i < routes.length; i++) {
+    for (var j = i + 1; j < routes.length; j++) {
+      final first = routes[i].polyline;
+      final second = routes[j].polyline;
       final intersections = <String>{};
       for (var x = 0; x < first.length - 1; x++) {
         for (var y = 0; y < second.length - 1; y++) {
@@ -33,6 +33,15 @@ int countArrowCrossings(Iterable<ArrowObject> arrows) {
           if (point == null ||
               (_isPathEndpoint(point, first) &&
                   _isPathEndpoint(point, second))) {
+            continue;
+          }
+          if (_isSharedJunction(
+            point,
+            routes[i].arrow,
+            first,
+            routes[j].arrow,
+            second,
+          )) {
             continue;
           }
           // A crossing at a bend is found by both adjacent segments. Count its
@@ -65,6 +74,49 @@ Offset? _segmentIntersection(Offset p1, Offset p2, Offset p3, Offset p4) {
 bool _isPathEndpoint(Offset point, List<Offset> path) =>
     (point - path.first).distanceSquared < 1e-10 ||
     (point - path.last).distanceSquared < 1e-10;
+
+bool _isSharedJunction(
+  Offset point,
+  ArrowObject firstArrow,
+  List<Offset> firstPath,
+  ArrowObject secondArrow,
+  List<Offset> secondPath,
+) {
+  final sharedSource = firstArrow.startAttachment?.objectId != null &&
+      firstArrow.startAttachment?.objectId ==
+          secondArrow.startAttachment?.objectId;
+  if (sharedSource &&
+      _isOnSegment(point, firstPath[0], firstPath[1]) &&
+      _isOnSegment(point, secondPath[0], secondPath[1])) {
+    return true;
+  }
+
+  final sharedTarget = firstArrow.endAttachment?.objectId != null &&
+      firstArrow.endAttachment?.objectId == secondArrow.endAttachment?.objectId;
+  if (sharedTarget &&
+      _isOnSegment(
+        point,
+        firstPath[firstPath.length - 2],
+        firstPath.last,
+      ) &&
+      _isOnSegment(
+        point,
+        secondPath[secondPath.length - 2],
+        secondPath.last,
+      )) {
+    return true;
+  }
+  return false;
+}
+
+bool _isOnSegment(Offset point, Offset start, Offset end) {
+  final segment = end - start;
+  final toPoint = point - start;
+  final cross = segment.dx * toPoint.dy - segment.dy * toPoint.dx;
+  if (cross.abs() > 1e-8) return false;
+  final dot = toPoint.dx * segment.dx + toPoint.dy * segment.dy;
+  return dot >= -1e-8 && dot <= segment.distanceSquared + 1e-8;
+}
 
 /// A small toggleable HUD badge that shows the live count of edge crossings
 /// (arrow-vs-arrow segment intersections) in the current diagram. Useful for

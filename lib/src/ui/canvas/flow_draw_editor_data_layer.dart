@@ -3157,6 +3157,17 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
     // Cardinal port → attachment relativePosition.
     const top = Offset(0.5, 0.0);
     const bottom = Offset(0.5, 1.0);
+    const left = Offset(0.0, 0.5);
+    const right = Offset(1.0, 0.5);
+
+    final incomingCount = <String, int>{};
+    for (final obj in canvasState.drawingObjects.values) {
+      if (obj is! ArrowObject) continue;
+      final targetId = obj.endAttachment?.objectId;
+      if (targetId != null) {
+        incomingCount[targetId] = (incomingCount[targetId] ?? 0) + 1;
+      }
+    }
 
     for (final obj in canvasState.drawingObjects.values) {
       if (obj is! ArrowObject) continue;
@@ -3175,7 +3186,23 @@ class _FlowDrawEditorDataLayerState extends State<FlowDrawEditorDataLayer>
       // branches cut sideways through their siblings.
       if (d.dy >= 0) {
         startRel = bottom;
-        endRel = top;
+        if ((incomingCount[tId] ?? 0) > 1) {
+          // A convergence node reads much more cleanly when outer branches
+          // enter from their respective sides and only the central branch
+          // enters from the top. Sending every branch to the top forces a long
+          // horizontal segment across the other branch lanes.
+          final sourceDelta = sRect.center.dx - tRect.center.dx;
+          final centerBand = tRect.width * 0.5;
+          if (sourceDelta < -centerBand) {
+            endRel = left;
+          } else if (sourceDelta > centerBand) {
+            endRel = right;
+          } else {
+            endRel = top;
+          }
+        } else {
+          endRel = top;
+        }
       } else {
         startRel = top;
         endRel = bottom;

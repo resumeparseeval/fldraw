@@ -22,11 +22,10 @@ class OrthogonalRouter {
   static const double _bendPenalty = 20.0;
   // Penalty per unit length of overlap with an existing path segment.
   static const double _overlapPenalty = 8.0;
-  // Flat penalty per perpendicular crossing of an existing path segment. Tuned
-  // so the router will take a moderately longer/bendier route to avoid weaving
-  // through another connector, but won't make extreme detours just to dodge a
-  // single unavoidable crossing.
-  static const double _crossingPenalty = 30.0;
+  // A crossing is much more expensive than a longer route. This makes later
+  // edges use the open outer lanes around a layered graph instead of taking a
+  // short cut through branches that have already been routed.
+  static const double _crossingPenalty = 1000.0;
 
   /// Routes an orthogonal path from [start] to [end], avoiding [obstacles].
   ///
@@ -932,7 +931,7 @@ class OrthogonalRouter {
   /// per perpendicular crossing.
   static double _lWeaveCost(Offset start, Offset corner, Offset end,
       List<(Offset, Offset)> existing) {
-    const crossingWeight = 60.0; // ~ a long detour; crossings are worse than minor overlap
+    const crossingWeight = 1000.0;
     final overlap = _overlapLength(start, corner, existing) +
         _overlapLength(corner, end, existing);
     final crossings = _crossingCount(start, corner, existing) +

@@ -1,12 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nodeline/nodeline.dart';
+import 'package:nodeline/src/models/drawing_entities.dart'
+    show ObjectAttachment;
 import 'package:nodeline/src/ui/canvas/crossing_counter.dart';
 
-ArrowObject _arrow(String id, List<Offset> renderedPath) => ArrowObject(
+ArrowObject _arrow(
+  String id,
+  List<Offset> renderedPath, {
+  String? startObjectId,
+  String? endObjectId,
+}) => ArrowObject(
   id: id,
   start: const Offset(-100, -100),
   end: const Offset(-50, -50),
+  startAttachment: startObjectId == null
+      ? null
+      : ObjectAttachment(
+          objectId: startObjectId,
+          relativePosition: const Offset(0.5, 1),
+        ),
+  endAttachment: endObjectId == null
+      ? null
+      : ObjectAttachment(
+          objectId: endObjectId,
+          relativePosition: const Offset(0.5, 0),
+        ),
 )..renderedPath = renderedPath;
 
 void main() {
@@ -33,5 +52,40 @@ void main() {
     final second = _arrow('second', const [Offset(0, 0), Offset(0, 10)]);
 
     expect(countArrowCrossings([first, second]), 0);
+  });
+
+  test('does not count the split of edges with a shared source', () {
+    final first = _arrow(
+      'first',
+      const [Offset(0, 0), Offset(0, 5), Offset(5, 5)],
+      startObjectId: 'decision',
+    );
+    final second = _arrow(
+      'second',
+      const [Offset(0, 0), Offset(0, 10)],
+      startObjectId: 'decision',
+    );
+
+    expect(countArrowCrossings([first, second]), 0);
+  });
+
+  test('still counts a later crossing between edges sharing a source', () {
+    final first = _arrow(
+      'first',
+      const [Offset(0, 0), Offset(0, 5), Offset(10, 5)],
+      startObjectId: 'decision',
+    );
+    final second = _arrow(
+      'second',
+      const [
+        Offset(0, 0),
+        Offset(0, 3),
+        Offset(7, 3),
+        Offset(7, 8),
+      ],
+      startObjectId: 'decision',
+    );
+
+    expect(countArrowCrossings([first, second]), 1);
   });
 }
