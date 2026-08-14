@@ -15,6 +15,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:perfect_freehand/perfect_freehand.dart';
 
+@visibleForTesting
+bool isCanvasShapeObject(DrawingObject object) =>
+    object is RectangleObject ||
+    object is CircleObject ||
+    object is DiamondObject ||
+    object is ParallelogramObject ||
+    object is ForkJoinObject ||
+    object is FigureObject ||
+    object is TextObject ||
+    object is SvgObject;
+
 class NodeDiffCheckData {
   final String id;
   final Offset offset;
@@ -818,11 +829,7 @@ class FlowDrawEditorRenderBox extends RenderBox
       );
       obj.isSelected = isSelected;
 
-      if (obj is RectangleObject ||
-          obj is CircleObject ||
-          obj is FigureObject ||
-          obj is TextObject ||
-          obj is SvgObject) {
+      if (isCanvasShapeObject(obj)) {
         canvas.save();
         canvas.translate(obj.rect.center.dx, obj.rect.center.dy);
         canvas.rotate(obj.angle);
