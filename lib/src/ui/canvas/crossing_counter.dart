@@ -77,7 +77,7 @@ class CrossingCounter extends StatefulWidget {
 }
 
 class _CrossingCounterState extends State<CrossingCounter> {
-  bool _enabled = false;
+  bool _enabled = true;
   CanvasState? _scheduledState;
   CanvasState? _refreshedState;
 
